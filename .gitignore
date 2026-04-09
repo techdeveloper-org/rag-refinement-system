@@ -1,0 +1,78 @@
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.Spotlight-V100
+.Trashes
+
+# IDE
+.idea/
+.vscode/
+*.iml
+.classpath
+.project
+.settings/
+*.suo
+*.user
+*.sln.docstates
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.jks
+secrets/
+credentials/
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Build artifacts — Java/Maven
+target/
+*.class
+*.jar
+*.war
+*.ear
+
+# Build artifacts — Node/Angular/React
+node_modules/
+dist/
+.angular/
+.next/
+out/
+coverage/
+.nyc_output/
+
+# Build artifacts — Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+dist/
+build/
+*.egg
+
+# Build artifacts — Android/Gradle
+.gradle/
+build/
+app/build/
+
+# Build artifacts — Docker
+docker-compose.override.yml
+
+# Temp
+*.tmp
+*.temp
+*.bak
