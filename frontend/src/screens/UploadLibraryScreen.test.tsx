@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { UploadLibraryScreen } from "@/screens/UploadLibraryScreen";
+import { ApiError } from "@/api/errors";
 import type { ApiClient } from "@/api/client";
 import type {
   Document,
@@ -69,5 +70,33 @@ describe("UploadLibraryScreen (FR-001 dedup)", () => {
       expect(onOpenDocument).toHaveBeenCalledWith(EXISTING_DOC);
     });
     expect(getDocument).toHaveBeenCalledWith(EXISTING_DOC.doc_id);
+  });
+
+  it("does not show 'Upload failed' when a deduped upload's getDocument fails", async () => {
+    const onOpenDocument = vi.fn();
+    const getDocument = vi.fn().mockRejectedValue(
+      new ApiError({
+        type: "about:blank",
+        title: "Not Found",
+        status: 404,
+        code: "NOT_FOUND",
+        detail: "Document not found.",
+      }),
+    );
+    const client = fakeClient({ getDocument });
+
+    render(<UploadLibraryScreen client={client} onOpenDocument={onOpenDocument} />);
+    await screen.findByRole("button", { name: /browse files/i });
+
+    await uploadAPdf();
+
+    await waitFor(() => {
+      expect(getDocument).toHaveBeenCalledWith(EXISTING_DOC.doc_id);
+    });
+    expect(screen.queryByText(/upload failed/i)).toBeNull();
+    expect(onOpenDocument).not.toHaveBeenCalled();
+    expect(
+      screen.getByText(/could not open the existing document|document not found/i),
+    ).toBeInTheDocument();
   });
 });

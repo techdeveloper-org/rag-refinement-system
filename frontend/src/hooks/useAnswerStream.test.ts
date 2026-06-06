@@ -81,6 +81,54 @@ describe("useAnswerStream", () => {
     expect(result.current.pending).toBe(false);
   });
 
+  it("reset clears turns and aborts the in-flight stream on a document switch", () => {
+    const { client, calls } = fakeStreamClient();
+    const { result } = renderHook(() => useAnswerStream(client));
+
+    act(() => {
+      result.current.ask(DOC_A, "first question");
+    });
+    expect(result.current.turns).toHaveLength(1);
+
+    act(() => {
+      result.current.reset();
+    });
+
+    expect(result.current.turns).toHaveLength(0);
+    expect(result.current.pending).toBe(false);
+    expect(calls[0]?.signal?.aborted).toBe(true);
+  });
+
+  it("does not update state after unmount when the aborted stream's error/finally settle", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const { client, calls } = fakeStreamClient();
+    const { result, unmount } = renderHook(() => useAnswerStream(client));
+
+    act(() => {
+      result.current.ask(DOC_A, "a question");
+    });
+
+    unmount();
+    expect(calls[0]?.signal?.aborted).toBe(true);
+
+    await act(async () => {
+      calls[0]?.handlers.onError({
+        type: "about:blank",
+        title: "NETWORK_ERROR",
+        status: 0,
+        code: "NETWORK_ERROR",
+      });
+      calls[0]?.resolve();
+      await Promise.resolve();
+    });
+
+    const stateUpdateWarnings = errorSpy.mock.calls.filter((args) =>
+      String(args[0]).includes("unmounted component"),
+    );
+    expect(stateUpdateWarnings).toHaveLength(0);
+    errorSpy.mockRestore();
+  });
+
   it("does not clear pending when an older stream finishes while a newer one is live", async () => {
     const { client, calls } = fakeStreamClient();
     const { result } = renderHook(() => useAnswerStream(client));

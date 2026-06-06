@@ -38,6 +38,25 @@ interface SseMessage {
 const DEFAULT_EVENT = "message";
 
 /**
+ * Decide whether a thrown error (or signal state) represents a deliberate
+ * abort rather than a genuine transport failure.
+ *
+ * A deliberate abort (re-ask, document switch, or unmount via
+ * `AbortController.abort()`) must stay silent and never surface as an error
+ * turn; only real failures should reach `onError`.
+ *
+ * @param error - The value caught from a fetch/read rejection.
+ * @param signal - The optional abort signal for the in-flight request.
+ * @returns True when the failure is an intentional cancellation.
+ */
+function isAbort(error: unknown, signal: AbortSignal | undefined): boolean {
+  if (signal?.aborted === true) {
+    return true;
+  }
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+/**
  * Parse a completed SSE block (lines between blank-line delimiters) into an
  * {@link SseMessage}. Concatenates multiple `data:` lines with newlines per the
  * SSE spec; ignores comment lines (starting with `:`).
@@ -255,7 +274,10 @@ export class AnswerStreamClient {
         body: JSON.stringify(request),
         ...(signal === undefined ? {} : { signal }),
       });
-    } catch {
+    } catch (error) {
+      if (isAbort(error, signal)) {
+        return;
+      }
       handlers.onError(
         syntheticProblem(0, "NETWORK_ERROR", "Could not reach the answer service."),
       );
@@ -275,22 +297,31 @@ export class AnswerStreamClient {
       return;
     }
 
-    for await (const event of iterateSseStream(response.body, signal)) {
-      switch (event.kind) {
-        case "token":
-          handlers.onToken(event.data);
-          break;
-        case "final":
-          handlers.onFinal(event.data);
-          break;
-        case "error":
-          handlers.onError(event.problem);
-          break;
-        default: {
-          const exhaustive: never = event;
-          throw new Error(`Unhandled SSE event: ${JSON.stringify(exhaustive)}`);
+    try {
+      for await (const event of iterateSseStream(response.body, signal)) {
+        switch (event.kind) {
+          case "token":
+            handlers.onToken(event.data);
+            break;
+          case "final":
+            handlers.onFinal(event.data);
+            break;
+          case "error":
+            handlers.onError(event.problem);
+            break;
+          default: {
+            const exhaustive: never = event;
+            throw new Error(`Unhandled SSE event: ${JSON.stringify(exhaustive)}`);
+          }
         }
       }
+    } catch (error) {
+      if (isAbort(error, signal)) {
+        return;
+      }
+      handlers.onError(
+        syntheticProblem(0, "NETWORK_ERROR", "Could not reach the answer service."),
+      );
     }
   }
 

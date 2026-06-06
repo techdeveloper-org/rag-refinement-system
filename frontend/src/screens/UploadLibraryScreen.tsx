@@ -55,15 +55,39 @@ export function UploadLibraryScreen({ client, onOpenDocument }: UploadLibraryScr
     void loadPage(page);
   }, [loadPage, page]);
 
+  const openExistingDocument = useCallback(
+    async (docId: string | undefined): Promise<void> => {
+      setToast({ tone: "info", message: "Already in library - opened existing." });
+      if (docId === undefined || docId.length === 0) {
+        setToast({
+          tone: "warning",
+          message: "Already in library, but could not open the existing document.",
+        });
+        return;
+      }
+      try {
+        const existing = await client.getDocument(docId);
+        onOpenDocument(existing);
+      } catch (error) {
+        const detail =
+          error instanceof ApiError ? error.problem.detail ?? error.problem.title : null;
+        setToast({
+          tone: "warning",
+          message:
+            detail ?? "Already in library, but could not open the existing document.",
+        });
+      }
+    },
+    [client, onOpenDocument],
+  );
+
   const handleUpload = useCallback(
     async (file: File, fields: IngestRequestFields): Promise<void> => {
       setUploading(true);
       try {
         const result = await client.ingestDocument(file, fields);
         if (result.deduplicated) {
-          setToast({ tone: "info", message: "Already in library - opened existing." });
-          const existing = await client.getDocument(result.doc_id);
-          onOpenDocument(existing);
+          await openExistingDocument(result.doc_id);
           return;
         }
         if (result.ingest_status === "fallback_only") {
@@ -81,7 +105,7 @@ export function UploadLibraryScreen({ client, onOpenDocument }: UploadLibraryScr
         setUploading(false);
       }
     },
-    [client, loadPage, page, onOpenDocument],
+    [client, loadPage, page, openExistingDocument],
   );
 
   const handleDelete = useCallback(

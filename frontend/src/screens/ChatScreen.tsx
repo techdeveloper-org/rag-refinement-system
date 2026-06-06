@@ -32,10 +32,11 @@ export function ChatScreen({ client, documentId, documentTitle }: ChatScreenProp
     () => new AnswerStreamClient({ baseUrl: apiBaseUrl(), getToken: getSessionToken }),
     [],
   );
-  const { turns, pending, ask, abort } = useAnswerStream(streamClient);
+  const { turns, pending, ask, reset } = useAnswerStream(streamClient);
 
   useEffect(() => {
     let active = true;
+    setToc([]);
     void client
       .getDocumentToc(documentId)
       .then((response) => {
@@ -50,9 +51,9 @@ export function ChatScreen({ client, documentId, documentTitle }: ChatScreenProp
       });
     return () => {
       active = false;
-      abort();
+      reset();
     };
-  }, [client, documentId, abort]);
+  }, [client, documentId, reset]);
 
   return (
     <main id="main-content" className="mx-auto flex h-full max-w-chat flex-col">

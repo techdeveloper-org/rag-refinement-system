@@ -9,6 +9,7 @@ export interface UseAnswerStreamResult {
   pending: boolean;
   ask: (documentId: DocumentId, query: string) => void;
   abort: () => void;
+  reset: () => void;
 }
 
 let turnCounter = 0;
@@ -35,15 +36,20 @@ function nextTurnId(): string {
  * newer stream is live.
  *
  * @param client - The configured AnswerStreamClient.
- * @returns The accumulated turns, a pending flag, the `ask` action, and an
- *   `abort` action that cancels any in-flight stream.
+ * @returns The accumulated turns, a pending flag, the `ask` action, an `abort`
+ *   action that cancels any in-flight stream, and a `reset` action that aborts
+ *   and clears the conversation (used on document switch).
  */
 export function useAnswerStream(client: AnswerStreamClient): UseAnswerStreamResult {
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [pending, setPending] = useState<boolean>(false);
   const abortRef = useRef<AbortController | null>(null);
+  const isMountedRef = useRef<boolean>(true);
 
   const updateTurn = useCallback((id: string, patch: Partial<ChatTurn>): void => {
+    if (!isMountedRef.current) {
+      return;
+    }
     setTurns((prev) => prev.map((turn) => (turn.id === id ? { ...turn, ...patch } : turn)));
   }, []);
 
@@ -73,6 +79,9 @@ export function useAnswerStream(client: AnswerStreamClient): UseAnswerStreamResu
           request,
           {
             onToken: (event) => {
+              if (!isMountedRef.current) {
+                return;
+              }
               updateTurn(id, { phase: "streaming" });
               setTurns((prev) =>
                 prev.map((existing) =>
@@ -96,6 +105,9 @@ export function useAnswerStream(client: AnswerStreamClient): UseAnswerStreamResu
           controller.signal,
         )
         .finally(() => {
+          if (!isMountedRef.current) {
+            return;
+          }
           updateTurn(id, { streaming: false });
           if (abortRef.current === controller) {
             setPending(false);
@@ -109,15 +121,28 @@ export function useAnswerStream(client: AnswerStreamClient): UseAnswerStreamResu
   const abort = useCallback((): void => {
     abortRef.current?.abort();
     abortRef.current = null;
-    setPending(false);
+    if (isMountedRef.current) {
+      setPending(false);
+    }
+  }, []);
+
+  const reset = useCallback((): void => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    if (isMountedRef.current) {
+      setTurns([]);
+      setPending(false);
+    }
   }, []);
 
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
+      isMountedRef.current = false;
       abortRef.current?.abort();
       abortRef.current = null;
     };
   }, []);
 
-  return { turns, pending, ask, abort };
+  return { turns, pending, ask, abort, reset };
 }
