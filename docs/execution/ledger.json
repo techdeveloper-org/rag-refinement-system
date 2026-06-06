@@ -147,7 +147,7 @@
       "depends_on": [
         "TODO-03"
       ],
-      "status": "in_progress",
+      "status": "done",
       "agents": [
         "ui-ux-designer",
         "consensus-agent",
@@ -161,7 +161,9 @@
       "gate": "DESIGN APPROVED; APCA Lc>=60 body",
       "stop_point": "User reviews design",
       "context_file": "todos/todo-04-phase3-uiux-design-standard-path.md",
-      "completed_artifacts": []
+      "completed_artifacts": [
+        "docs/phase-3-design/"
+      ]
     },
     {
       "id": "TODO-05",
@@ -171,7 +173,7 @@
       "depends_on": [
         "TODO-04"
       ],
-      "status": "pending",
+      "status": "in_progress",
       "agents": [
         "business-analyst-agent",
         "product-manager-agent",

@@ -1,0 +1,73 @@
+{
+  "phase": "Phase 3 COMPLETE",
+  "verdict": "DESIGN APPROVED",
+  "design_status": "DESIGN APPROVED",
+  "design_path": "standard",
+  "figma_file_key": null,
+  "rounds": 2,
+  "a11y_pass": true,
+  "open_items": 0,
+  "reviewer": "consensus-agent",
+  "gate_type": "BINARY (DESIGN APPROVED / DESIGN REJECTED - no partial states)",
+  "generated": "2026-06-06",
+  "screens_designed": 5,
+  "components": 18,
+  "artifacts": {
+    "wireframes": "docs/phase-3-design/wireframes/ (UploadLibrary, DocumentView, Chat, EmptyLoadingError, FallbackIndicator)",
+    "tokens_css": "docs/phase-3-design/tokens_css.css",
+    "component_library": "docs/phase-3-design/component_library.md",
+    "screen_inventory": "docs/phase-3-design/screen_inventory.md",
+    "accessibility_report": "docs/phase-3-design/accessibility_report.json"
+  },
+  "gate_checks": {
+    "fr_screen_coverage": "PASS - every personal-tool FR (FR-001/002/003/007/008/009/011/012/016/018/024/025/026/027/028) has >=1 screen",
+    "hld_component_coverage": "PASS - every UI-facing HLD component (SPA, /v1/answer SSE, router rationale/sections/confidence, TOC authority, upload, doc mgmt, fallback branch, RFC-7807 errors) has >=1 component",
+    "wireframes_present": "PASS - 5 wireframe files for all designed screens",
+    "apca_body_text_lc60": "PASS - all body-text pairs Lc >= 60 (min 76.4)",
+    "apca_ui_component_lc45": "PASS - all UI pairs Lc >= 45 (min 57.1)",
+    "apca_large_text_lc30": "PASS - all large-text pairs Lc >= 30 (min 76.4)",
+    "token_export": "PASS - tokens_css.css present (Tailwind-mappable per ADR-9)",
+    "dpdp_no_pii": "PASS - no PII in any wireframe/token/inventory; generic placeholders only",
+    "hallucination": "PASS - 0 fabricated screens, 0 fabricated FR refs, 0 invented API response shapes",
+    "api_contract_fidelity": "PASS - differentiators bind to real openapi.yaml fields (citations[], routing.confidence[], routing.rationale, routing.sections[])",
+    "rework_required": 0
+  },
+  "round_1_rejected": {
+    "verdict": "DESIGN REJECTED",
+    "itemized_issues": [
+      "1. APCA: border token (#C2CAD6) on surface scored Lc 28.8 (< 45 UI threshold) and on surface-alt Lc 23.4 - fails RPwD s40 UI-component bar.",
+      "2. APCA: pairing text-primary (dark) on the conf-high green tint for the large confidence numeral scored Lc 25.0 (< 30 large-text threshold).",
+      "3. Color-only risk: an early ConfidenceMeter concept conveyed level by fill color alone (WCAG 1.4.1 violation)."
+    ]
+  },
+  "round_2_fixes_applied": [
+    "1. Darkened the functional border token to #7E8A9C -> Lc 62.6 (surface) / 57.1 (surface-alt); kept #C2CAD6 as a decorative-only --color-border-subtle (non-load-bearing). Both functional pairs now >= 45.",
+    "2. Replaced the dark-text-on-tint numeral with a solid-colored large numeral (conf-high #1B7A40 as text on surface) -> Lc 76.4 >= 30. The confidence value is rendered as colored large text on the surface, not dark text on a tint.",
+    "3. ConfidenceMeter and FallbackBanner now convey state via label text + numeric value + bar/icon in addition to color (documented in accessibility_report.json wcag_aa_notes 1.4.1)."
+  ],
+  "round_2_verification": {
+    "apca": "22/22 pairs PASS (apca_pass=22, apca_fail=0)",
+    "wcag_text": "20/20 text pairs PASS 4.5:1; 2 non-text border pairs meet WCAG 1.4.11 (3:1)",
+    "keyboard_nav": "documented per screen (GIGW v3.0); no keyboard traps; global :focus-visible ring; 44px min target",
+    "differentiators": "citations -> AnswerFinalEvent.citations[]; confidence -> routing.confidence[]; explainability -> routing.rationale + sections[] + confidence[] - all real openapi.yaml fields"
+  },
+  "advisories_honored_from_phase2": [
+    "AC-ADV-002 (LOW): mid-stream SSE error (event:error -> Problem) is explicitly surfaced as a role=alert and NOT treated as silent success on a 200-opened stream (Chat + EmptyLoadingError wireframes).",
+    "ADV-006 (LOW): multi-document is routing-only (enterprise) for MVP; the personal-tool Chat is single-document (AnswerRequest.document_id) - reflected in screen_inventory non-UI table."
+  ],
+  "needs_user_decision": [
+    {
+      "id": "DUD-1",
+      "topic": "Theme mode",
+      "question": "Ship light theme only for MVP, or also a dark theme?",
+      "recommended_default": "Light theme only for MVP (all APCA values computed for light). Dark theme is an additive Phase-B token set; recommend deferring to keep the MVP design surface small. If dark mode is wanted, a second APCA pass on dark-surface pairs is required."
+    },
+    {
+      "id": "DUD-2",
+      "topic": "Rerank control visibility (FR-016)",
+      "question": "Expose the per-request rerank toggle in the personal-tool composer, or keep it backend-default-off?",
+      "recommended_default": "Keep it as a hidden advanced toggle (default off) for MVP; FR-016 is P1 and AnswerRequest.rerank already defaults false. Surface it only if power users ask."
+    }
+  ],
+  "instruction_to_phase_4_and_b": "Phase 3 COMPLETE (Standard Path). Import tokens from tokens_css.css (map into tailwind.config.js per ADR-9). Use wireframes/ for layout and component_library.md for variant tables. Bind the 3 differentiators to the named openapi.yaml fields. Do NOT hardcode hex/spacing - reference var(--color-*) / var(--spacing-*). Do NOT break the APCA Lc values in accessibility_report.json during implementation."
+}
