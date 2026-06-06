@@ -544,7 +544,7 @@
         "TODO-14",
         "TODO-15"
       ],
-      "status": "pending",
+      "status": "done",
       "agents": [
         "reliability-auditor"
       ],
@@ -555,7 +555,9 @@
       "gate": "RS = 1.0 (retry loop, no deploy below 1.0)",
       "stop_point": null,
       "context_file": "todos/todo-16-phasee-reliability-gate.md",
-      "completed_artifacts": []
+      "completed_artifacts": [
+        "docs/phase-E-reliability/"
+      ]
     },
     {
       "id": "TODO-17",

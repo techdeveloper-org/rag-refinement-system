@@ -1,0 +1,42 @@
+{
+  "$comment": "Phase E Reliability Gate verdict. RS = (NLI x FactScore x DRE x Coverage)^(1/4). Component values independently re-verified against reality on 2026-06-06, not merely trusted from prior JSON. Coverage re-run via 'python -m pytest --cov=backend --cov=ingestion --cov=router --cov=db --cov-report=term' produced TOTAL 100% (1631 stmts / 0 missed; 228 branches / 0 partial) and 265 passed / 1 skipped, matching Phase D. Security from docs/phase-F-security/security_verdict.json (unresolved_total=0, APPROVED). Audit-only; no artifact modified except the two files under docs/phase-E-reliability/.",
+  "phase": "E",
+  "generated": "2026-06-06",
+  "nli": 1.0,
+  "factscore": 1.0,
+  "dre": 1.0,
+  "coverage": 1.0,
+  "rs": 1.0,
+  "security_unresolved": 0,
+  "gate_target": "RS=1.0",
+  "verdict": "PASS",
+  "deploy_authorized": true,
+  "components_below_1": [],
+  "verification": {
+    "coverage_rerun_command": "python -m pytest --cov=backend --cov=ingestion --cov=router --cov=db --cov-report=term",
+    "coverage_rerun_total_pct": 100.0,
+    "coverage_rerun_statements_total": 1631,
+    "coverage_rerun_statements_missed": 0,
+    "coverage_rerun_branches_total": 228,
+    "coverage_rerun_branches_partial": 0,
+    "pytest_rerun_result": "265 passed, 1 skipped",
+    "coverage_matches_phase_d_json": true,
+    "nli_source": "docs/phase-C-hallucination/faithfulness_scorecard.json",
+    "factscore_source": "docs/phase-C-hallucination/faithfulness_scorecard.json",
+    "dre_source": "docs/phase-D-qa/qa_verdict.json",
+    "coverage_source": "docs/phase-D-qa/qa_verdict.json + independent re-run",
+    "security_source": "docs/phase-F-security/security_verdict.json",
+    "output_contract_source": "docs/phase-C-hallucination/faithfulness_scorecard.json (openapi.yaml authoritative; present at docs/phase-1-api-contracts/openapi.yaml)"
+  },
+  "security": {
+    "verdict": "APPROVED",
+    "unresolved_total": 0,
+    "unresolved_critical": 0,
+    "unresolved_high": 0,
+    "forces_gate_fail": false
+  },
+  "cascading_failure": {
+    "deploy_block_conditions_cleared": true,
+    "remediation_routes_triggered": []
+  }
+}
