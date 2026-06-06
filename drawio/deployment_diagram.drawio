@@ -1,0 +1,29 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram id="deployment_diagram" name="Deployment Diagram">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="850" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="spa" value="Browser SPA&#10;React + Vite" style="shape=node;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="40" y="60" width="140" height="60" as="geometry"/></mxCell>
+        <mxCell id="ent" value="Enterprise RAG client" style="shape=node;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="40" y="160" width="140" height="60" as="geometry"/></mxCell>
+        <mxCell id="cloud" value="Cloud (Docker, 12-factor)" style="rounded=0;whiteSpace=wrap;html=1;verticalAlign=top;fillColor=#f5f5f5;" vertex="1" parent="1"><mxGeometry x="260" y="20" width="520" height="500" as="geometry"/></mxCell>
+        <mxCell id="lb" value="Load Balancer / Ingress" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="cloud"><mxGeometry x="180" y="30" width="160" height="40" as="geometry"/></mxCell>
+        <mxCell id="api1" value="FastAPI replica 1&#10;/health /ready" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="cloud"><mxGeometry x="60" y="110" width="160" height="50" as="geometry"/></mxCell>
+        <mxCell id="api2" value="FastAPI replica 2&#10;/health /ready" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="cloud"><mxGeometry x="300" y="110" width="160" height="50" as="geometry"/></mxCell>
+        <mxCell id="qd" value="Qdrant node x1&#10;chunk vectors" style="shape=cylinder3;whiteSpace=wrap;html=1;" vertex="1" parent="cloud"><mxGeometry x="40" y="220" width="130" height="70" as="geometry"/></mxCell>
+        <mxCell id="pg" value="PostgreSQL x1&#10;documents, sections" style="shape=cylinder3;whiteSpace=wrap;html=1;" vertex="1" parent="cloud"><mxGeometry x="200" y="220" width="130" height="70" as="geometry"/></mxCell>
+        <mxCell id="obj" value="Object Storage&#10;raw uploads" style="shape=cylinder3;whiteSpace=wrap;html=1;" vertex="1" parent="cloud"><mxGeometry x="360" y="220" width="130" height="70" as="geometry"/></mxCell>
+        <mxCell id="prov" value="External Providers: Anthropic | OpenAI | Cohere | Azure Doc Intelligence | LangSmith" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;" vertex="1" parent="cloud"><mxGeometry x="40" y="340" width="450" height="40" as="geometry"/></mxCell>
+        <mxCell id="de1" style="endArrow=open;html=1;" edge="1" parent="1" source="spa" target="lb"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="de2" style="endArrow=open;html=1;" edge="1" parent="1" source="ent" target="lb"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="de3" style="endArrow=open;html=1;" edge="1" parent="cloud" source="lb" target="api1"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="de4" style="endArrow=open;html=1;" edge="1" parent="cloud" source="lb" target="api2"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="de5" style="endArrow=open;html=1;" edge="1" parent="cloud" source="api1" target="qd"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="de6" style="endArrow=open;html=1;" edge="1" parent="cloud" source="api1" target="pg"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="de7" style="endArrow=open;html=1;" edge="1" parent="cloud" source="api2" target="obj"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="de8" style="endArrow=open;html=1;" edge="1" parent="cloud" source="api1" target="prov"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="note" value="MVP sizing = HLD section 10 Little's Law (2 API replicas + 1 Qdrant + 1 Postgres). IN-residency = region-pinned instances (OAQ-5). Mermaid source: uml/deployment_diagram.md" style="text;html=1;align=left;fontSize=10;" vertex="1" parent="1"><mxGeometry x="40" y="540" width="740" height="40" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,0 +1,25 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram id="call_graph_diagram" name="Call Graph Diagram">
+    <mxGraphModel dx="900" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="600" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="title" value="Call Graph Diagram - RAG Refinement System" style="text;html=1;align=center;verticalAlign=middle;fontSize=16;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="40" width="760" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="body" value="This is an editable draw.io placeholder for the Call Graph Diagram.
+
+The authoritative, fully rendered diagram is the GitHub-renderable Mermaid source:
+  uml/call_graph_diagram.md
+
+Source of truth: docs/phase-1-architecture/hld.md (HLD) + docs/phase-1-api-contracts/openapi.yaml.
+Open uml/call_graph_diagram.md to view/edit the canonical diagram; this .drawio is provided so all 13 stems exist in mxGraph form for draw.io desktop / app.diagrams.net / VS Code draw.io." style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="40" y="100" width="760" height="240" as="geometry"/>
+        </mxCell>
+        <mxCell id="ref" value="Mermaid source (canonical): uml/call_graph_diagram.md" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="40" y="360" width="760" height="40" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
