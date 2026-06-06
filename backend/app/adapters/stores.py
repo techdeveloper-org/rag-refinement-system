@@ -1,0 +1,185 @@
+"""Production ingestion ports: SQLAlchemy section store + Qdrant vector store.
+
+The ``ingestion`` pipeline reaches Postgres and Qdrant through its own synchronous
+``SectionStore`` and ``VectorStore`` Protocols. These are the thin production
+adapters the pipeline's docstrings reference: ``SqlAlchemySectionStore`` persists
+documents + sections via ``db.models`` (idempotent on content hash), and
+``QdrantVectorStore`` upserts chunk points keyed by their deterministic id.
+
+Both are synchronous because the pipeline is synchronous; the backend runs the
+pipeline in a worker thread (see ``PipelineIngestor``). Connection details resolve
+from the environment (``DATABASE_URL`` / ``QDRANT_URL``); no DSN or key is
+hardcoded. These adapters only touch the network when the live ingestor provider
+is actually invoked, so importing this module requires no live services.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from db.models import Document, Section
+from sqlalchemy import create_engine, delete, select
+from sqlalchemy.orm import Session, sessionmaker
+
+from ingestion.pipeline import SectionRow
+
+
+class SqlAlchemySectionStore:
+    """Synchronous Postgres section store over ``db.models`` (idempotent).
+
+    Implements the pipeline's ``SectionStore`` Protocol: content-hash dedup lookup,
+    document upsert, and full section replacement, all tenant-stamped. Each method
+    runs in its own short-lived session.
+    """
+
+    def __init__(self, session_factory: sessionmaker[Session]) -> None:
+        """Bind the store to a synchronous session factory.
+
+        Args:
+            session_factory: Factory yielding synchronous ORM sessions.
+        """
+        self._session_factory = session_factory
+
+    @classmethod
+    def from_database_url(cls, database_url: str) -> SqlAlchemySectionStore:
+        """Build a section store from a synchronous PostgreSQL DSN.
+
+        Args:
+            database_url: SQLAlchemy DSN (e.g. ``postgresql+psycopg://...``).
+
+        Returns:
+            A store bound to a freshly created engine/session factory.
+        """
+        engine = create_engine(database_url, pool_pre_ping=True)
+        factory = sessionmaker(engine, expire_on_commit=False)
+        return cls(factory)
+
+    def find_doc_id_by_hash(self, tenant_id: str, content_hash_value: str) -> str | None:
+        """Return an existing ``doc_id`` for this tenant + content hash, or None.
+
+        Args:
+            tenant_id: Owning tenant.
+            content_hash_value: SHA-256 content hash of the upload.
+
+        Returns:
+            The existing document id for an identical prior upload, else None.
+        """
+        stmt = select(Document.doc_id).where(
+            Document.tenant_id == tenant_id,
+            Document.content_hash == content_hash_value,
+        )
+        with self._session_factory() as session:
+            return session.execute(stmt).scalar_one_or_none()
+
+    def upsert_document(
+        self,
+        doc_id: str,
+        tenant_id: str,
+        title: str | None,
+        domain: str | None,
+        total_pages: int,
+        content_hash_value: str | None,
+        ingest_status: str,
+        fallback_only: bool,
+    ) -> None:
+        """Create or update the document row (tenant-scoped).
+
+        Args:
+            doc_id: Document primary key.
+            tenant_id: Owning tenant.
+            title: Optional title.
+            domain: Optional domain.
+            total_pages: Page count.
+            content_hash_value: Content hash (None in no-retention mode).
+            ingest_status: One of ``db.models.INGEST_STATUS_VALUES``.
+            fallback_only: True when no structure was detected (Scenario C).
+        """
+        with self._session_factory() as session, session.begin():
+            row = session.get(Document, doc_id)
+            if row is None:
+                row = Document(doc_id=doc_id, tenant_id=tenant_id)
+                session.add(row)
+            row.tenant_id = tenant_id
+            row.title = title
+            row.domain = domain
+            row.total_pages = total_pages
+            row.content_hash = content_hash_value
+            row.ingest_status = ingest_status
+            row.fallback_only = fallback_only
+
+    def replace_sections(self, doc_id: str, rows: list[SectionRow]) -> int:
+        """Replace all sections for ``doc_id`` with ``rows`` (idempotent).
+
+        Args:
+            doc_id: Document whose sections are replaced.
+            rows: New section rows.
+
+        Returns:
+            The number of section rows written.
+        """
+        with self._session_factory() as session, session.begin():
+            session.execute(delete(Section).where(Section.doc_id == doc_id))
+            for row in rows:
+                session.add(
+                    Section(
+                        section_id=row.section_id,
+                        doc_id=row.doc_id,
+                        tenant_id=row.tenant_id,
+                        title=row.title,
+                        level=row.level,
+                        page_start=row.page_start,
+                        page_end=row.page_end,
+                    )
+                )
+            return len(rows)
+
+
+class QdrantVectorStore:
+    """Synchronous Qdrant chunk-point store (idempotent on deterministic ids).
+
+    Implements the pipeline's ``VectorStore`` Protocol. The Qdrant client is built
+    lazily from ``QDRANT_URL`` so importing this module needs no live Qdrant.
+    """
+
+    def __init__(self, client: object | None = None) -> None:
+        """Initialize the vector store.
+
+        Args:
+            client: Optional pre-built ``qdrant_client.QdrantClient``; constructed
+                lazily from ``QDRANT_URL`` when omitted.
+        """
+        self._client = client
+
+    def _ensure_client(self) -> object:
+        """Lazily construct the Qdrant client from ``QDRANT_URL``.
+
+        Returns:
+            The Qdrant client instance.
+        """
+        if self._client is None:
+            from db.qdrant_bootstrap import get_client
+
+            self._client = get_client()
+        return self._client
+
+    def upsert_points(self, points: list[dict[str, Any]]) -> int:
+        """Upsert chunk points (deterministic ids make this idempotent).
+
+        Args:
+            points: Each a dict with ``id``, ``vector`` and ``payload`` keys.
+
+        Returns:
+            The number of points upserted.
+        """
+        if not points:
+            return 0
+        from db.qdrant_bootstrap import COLLECTION_NAME
+        from qdrant_client import models as qm
+
+        client = self._ensure_client()
+        structs = [
+            qm.PointStruct(id=point["id"], vector=point["vector"], payload=point["payload"])
+            for point in points
+        ]
+        client.upsert(collection_name=COLLECTION_NAME, points=structs)  # type: ignore[attr-defined]
+        return len(points)
