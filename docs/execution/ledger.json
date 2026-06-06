@@ -441,7 +441,7 @@
         "TODO-11",
         "TODO-12"
       ],
-      "status": "pending",
+      "status": "done",
       "agents": [
         "hallucination-detector",
         "context-faithfulness-engineer"
@@ -453,7 +453,10 @@
       "gate": "NLI=1.0 AND FactScore=1.0 (retry loop)",
       "stop_point": null,
       "context_file": "todos/todo-13-phasec-hallucination-gate.md",
-      "completed_artifacts": []
+      "completed_artifacts": [
+        "docs/phase-C-hallucination/",
+        "backend/app/adapters/ (FIX-C-01..03)"
+      ]
     },
     {
       "id": "TODO-14",
