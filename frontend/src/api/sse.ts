@@ -247,6 +247,10 @@ export class AnswerStreamClient {
    * stream starts; a mid-stream `event: error` is reported via `onError` too,
    * so it is never silently dropped (AC-ADV-002).
    *
+   * A deliberate abort stays silent on every path - the fetch rejection, the
+   * non-2xx and null-body post-fetch branches, and the read-loop rejection - so
+   * a user-cancelled turn never surfaces a spurious error.
+   *
    * @param request - The AnswerRequest (document_id + query, plus optionals).
    * @param handlers - Token/final/error callbacks.
    * @param signal - Optional abort signal to cancel the stream.
@@ -285,12 +289,18 @@ export class AnswerStreamClient {
     }
 
     if (!response.ok) {
+      if (isAbort(undefined, signal)) {
+        return;
+      }
       const problem = await this.parsePreStreamProblem(response);
       handlers.onError(problem);
       return;
     }
 
     if (response.body === null) {
+      if (isAbort(undefined, signal)) {
+        return;
+      }
       handlers.onError(
         syntheticProblem(502, "EMPTY_STREAM", "The answer stream returned no data."),
       );

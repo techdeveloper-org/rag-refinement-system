@@ -17,6 +17,12 @@ export interface ChatTurn {
   phase: StreamPhase;
   final: AnswerFinalEvent | null;
   error: Problem | null;
+  /**
+   * True when the turn's stream was aborted (superseded by a re-ask, or
+   * cancelled) rather than completed or errored. A cancelled turn holds a
+   * truncated partial answer and must not be presented as a finished answer.
+   */
+  cancelled: boolean;
 }
 
 interface ChatStreamProps {
@@ -88,6 +94,11 @@ export function ChatStream({ turns, toc, onJumpToPage, onRetry }: ChatStreamProp
           ) : null}
           {turn.streaming && turn.answerText.length === 0 ? (
             <StreamingIndicator phase={turn.phase} />
+          ) : null}
+          {turn.cancelled && turn.final === null && turn.error === null ? (
+            <p className="text-body-sm italic text-text-secondary" data-testid="cancelled-marker">
+              Cancelled / superseded
+            </p>
           ) : null}
           {turn.error !== null ? (
             <ErrorState

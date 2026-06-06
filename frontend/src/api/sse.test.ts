@@ -174,6 +174,52 @@ describe("AnswerStreamClient.streamAnswer", () => {
     expect(handlers.finals).toHaveLength(0);
   });
 
+  it("stays silent (no onError) when the response is !ok but the request was aborted", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ status: 500 }), {
+        status: 500,
+        headers: { "Content-Type": "application/problem+json" },
+      }),
+    );
+    const client = new AnswerStreamClient({
+      baseUrl: "http://localhost:8000",
+      getToken: () => null,
+      fetchImpl,
+    });
+    const handlers = collectHandlers();
+
+    await client.streamAnswer(REQUEST, handlers, controller.signal);
+
+    expect(handlers.errors).toHaveLength(0);
+    expect(handlers.tokens).toHaveLength(0);
+    expect(handlers.finals).toHaveLength(0);
+  });
+
+  it("stays silent (no onError) when the body is null but the request was aborted", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(null, {
+        status: 204,
+        headers: { "Content-Type": "text/event-stream" },
+      }),
+    );
+    const client = new AnswerStreamClient({
+      baseUrl: "http://localhost:8000",
+      getToken: () => null,
+      fetchImpl,
+    });
+    const handlers = collectHandlers();
+
+    await client.streamAnswer(REQUEST, handlers, controller.signal);
+
+    expect(handlers.errors).toHaveLength(0);
+    expect(handlers.tokens).toHaveLength(0);
+    expect(handlers.finals).toHaveLength(0);
+  });
+
   it("stays silent (no onError) when the stream read is aborted mid-flight", async () => {
     const controller = new AbortController();
     const abortError = new DOMException("The operation was aborted.", "AbortError");

@@ -99,6 +99,60 @@ describe("useAnswerStream", () => {
     expect(calls[0]?.signal?.aborted).toBe(true);
   });
 
+  it("marks a superseded turn cancelled (not a completed answer) when re-asked mid-stream", async () => {
+    const { client, calls } = fakeStreamClient();
+    const { result } = renderHook(() => useAnswerStream(client));
+
+    act(() => {
+      result.current.ask(DOC_A, "first question");
+    });
+    act(() => {
+      calls[0]?.handlers.onToken({ token: "Partial answer" });
+    });
+    act(() => {
+      result.current.ask(DOC_A, "second question");
+    });
+    expect(calls[0]?.signal?.aborted).toBe(true);
+
+    await act(async () => {
+      calls[0]?.resolve();
+      await Promise.resolve();
+    });
+
+    const supersededTurn = result.current.turns[0];
+    expect(supersededTurn?.cancelled).toBe(true);
+    expect(supersededTurn?.streaming).toBe(false);
+    expect(supersededTurn?.final).toBeNull();
+    expect(supersededTurn?.error).toBeNull();
+    expect(supersededTurn?.answerText).toBe("Partial answer");
+  });
+
+  it("does not mark a normally completed turn as cancelled", async () => {
+    const { client, calls } = fakeStreamClient();
+    const { result } = renderHook(() => useAnswerStream(client));
+
+    act(() => {
+      result.current.ask(DOC_A, "a question");
+    });
+    act(() => {
+      calls[0]?.handlers.onFinal({
+        query_id: "qry_1",
+        answer: "The complete answer.",
+        citations: [],
+        routing: { sections: [], confidence: [], fallback: false },
+      });
+    });
+
+    await act(async () => {
+      calls[0]?.resolve();
+      await Promise.resolve();
+    });
+
+    const completedTurn = result.current.turns[0];
+    expect(completedTurn?.cancelled).toBe(false);
+    expect(completedTurn?.final?.answer).toBe("The complete answer.");
+  });
+
   it("does not update state after unmount when the aborted stream's error/finally settle", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const { client, calls } = fakeStreamClient();

@@ -51,9 +51,14 @@ export function ChatScreen({ client, documentId, documentTitle }: ChatScreenProp
       });
     return () => {
       active = false;
+    };
+  }, [client, documentId]);
+
+  useEffect(() => {
+    return () => {
       reset();
     };
-  }, [client, documentId, reset]);
+  }, [documentId, reset]);
 
   return (
     <main id="main-content" className="mx-auto flex h-full max-w-chat flex-col">

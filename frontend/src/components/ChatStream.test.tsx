@@ -13,6 +13,7 @@ function turn(overrides: Partial<ChatTurn>): ChatTurn {
     phase: "streaming",
     final: null,
     error: null,
+    cancelled: false,
     ...overrides,
   };
 }

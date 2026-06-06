@@ -64,6 +64,7 @@ export function useAnswerStream(client: AnswerStreamClient): UseAnswerStreamResu
         phase: "routing",
         final: null,
         error: null,
+        cancelled: false,
       };
       setTurns((prev) => [...prev, turn]);
       setPending(true);
@@ -73,6 +74,8 @@ export function useAnswerStream(client: AnswerStreamClient): UseAnswerStreamResu
       abortRef.current = controller;
 
       const request: AnswerRequest = { document_id: documentId, query };
+
+      let terminalReceived = false;
 
       void client
         .streamAnswer(
@@ -92,6 +95,7 @@ export function useAnswerStream(client: AnswerStreamClient): UseAnswerStreamResu
               );
             },
             onFinal: (event) => {
+              terminalReceived = true;
               updateTurn(id, {
                 final: event,
                 answerText: event.answer,
@@ -99,6 +103,7 @@ export function useAnswerStream(client: AnswerStreamClient): UseAnswerStreamResu
               });
             },
             onError: (problem) => {
+              terminalReceived = true;
               updateTurn(id, { error: problem, streaming: false });
             },
           },
@@ -108,7 +113,8 @@ export function useAnswerStream(client: AnswerStreamClient): UseAnswerStreamResu
           if (!isMountedRef.current) {
             return;
           }
-          updateTurn(id, { streaming: false });
+          const wasCancelled = !terminalReceived && controller.signal.aborted;
+          updateTurn(id, { streaming: false, ...(wasCancelled ? { cancelled: true } : {}) });
           if (abortRef.current === controller) {
             setPending(false);
             abortRef.current = null;
