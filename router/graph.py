@@ -181,12 +181,16 @@ def _apply_threshold(
     """Select sections per the confidence-thresholding rules (PRD 8.3 / HLD 6).
 
     Rules:
-        - Sections scoring >= ``confidence_threshold`` are included.
-        - If none reach that threshold, sections in
-          ``[LOW_CONFIDENCE_FLOOR, confidence_threshold)`` are included instead.
-        - Sections below ``LOW_CONFIDENCE_FLOOR`` are always excluded.
+        - Sections below ``LOW_CONFIDENCE_FLOOR`` are always excluded first,
+          regardless of the caller-supplied ``confidence_threshold``.
+        - Among the eligible (>= floor) survivors, sections scoring
+          >= ``confidence_threshold`` are included.
+        - If none of the survivors reach that threshold, the remaining eligible
+          sections in ``[LOW_CONFIDENCE_FLOOR, confidence_threshold)`` are
+          included instead.
         - The result is sorted by descending confidence and capped at
-          ``max_sections``.
+          ``max_sections``. The effective high-band cutoff is therefore
+          ``max(confidence_threshold, LOW_CONFIDENCE_FLOOR)``.
 
     Args:
         ranked: TOC-validated ranked sections.
@@ -197,14 +201,11 @@ def _apply_threshold(
         The selected sections (possibly empty, which signals fallback upstream).
     """
     ordered = sorted(ranked, key=lambda item: item.confidence, reverse=True)
-    high = [item for item in ordered if item.confidence >= confidence_threshold]
+    eligible = [item for item in ordered if item.confidence >= LOW_CONFIDENCE_FLOOR]
+    high = [item for item in eligible if item.confidence >= confidence_threshold]
     if high:
         return high[:max_sections]
-    mid = [
-        item
-        for item in ordered
-        if LOW_CONFIDENCE_FLOOR <= item.confidence < confidence_threshold
-    ]
+    mid = [item for item in eligible if item.confidence < confidence_threshold]
     return mid[:max_sections]
 
 

@@ -122,6 +122,64 @@ class TestRankedSection:
             RankedSection(section_id="DROP TABLE", confidence=0.5)
 
 
+class TestApplyThreshold:
+    """The confidence-thresholding floor invariant (FINDING #8 regression)."""
+
+    @pytest.mark.anyio
+    async def test_low_threshold_does_not_admit_sub_floor_section(self) -> None:
+        """A threshold below the floor must not select a sub-0.5 section.
+
+        With ``confidence_threshold=0.4`` and the only candidate at 0.45, the
+        section is below ``LOW_CONFIDENCE_FLOOR`` and must be excluded, leaving
+        an empty selection that signals fallback upstream.
+        """
+        from router.graph import _apply_threshold
+        from router.schema import RankedSection
+
+        ranked = [RankedSection(section_id="sec_a1", confidence=0.45)]
+        selected = _apply_threshold(ranked, confidence_threshold=0.4, max_sections=3)
+        assert selected == []
+
+    @pytest.mark.anyio
+    async def test_low_threshold_keeps_eligible_section(self) -> None:
+        """A section at or above the floor is still selected under a low threshold."""
+        from router.graph import _apply_threshold
+        from router.schema import RankedSection
+
+        ranked = [
+            RankedSection(section_id="sec_a1", confidence=0.45),
+            RankedSection(section_id="sec_b2", confidence=0.6),
+        ]
+        selected = _apply_threshold(ranked, confidence_threshold=0.4, max_sections=3)
+        assert [item.section_id for item in selected] == ["sec_b2"]
+
+    @pytest.mark.anyio
+    async def test_normal_threshold_high_band_unchanged(self) -> None:
+        """The normal case (threshold >= floor) preserves high-band behavior."""
+        from router.graph import _apply_threshold
+        from router.schema import RankedSection
+
+        ranked = [
+            RankedSection(section_id="sec_a1", confidence=0.9),
+            RankedSection(section_id="sec_b2", confidence=0.6),
+        ]
+        selected = _apply_threshold(ranked, confidence_threshold=0.7, max_sections=3)
+        assert [item.section_id for item in selected] == ["sec_a1"]
+
+    @pytest.mark.anyio
+    async def test_normal_threshold_mid_band_unchanged(self) -> None:
+        """The mid band fires when no section reaches the threshold."""
+        from router.graph import _apply_threshold
+        from router.schema import RankedSection
+
+        ranked = [
+            RankedSection(section_id="sec_a1", confidence=0.6),
+            RankedSection(section_id="sec_b2", confidence=0.55),
+        ]
+        selected = _apply_threshold(ranked, confidence_threshold=0.7, max_sections=3)
+        assert [item.section_id for item in selected] == ["sec_a1", "sec_b2"]
+
+
 class TestTocCacheAndGraph:
     """The TOC projection cache and the offline pipeline path."""
 
