@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
 from ingestion.chunker import Chunk, chunk_document
-from ingestion.embedder import Embedder
+from ingestion.embedder import EMBEDDING_DIM, Embedder, EmbedderDimensionError
 from ingestion.ids import doc_id_for, section_id_for
 from ingestion.parser import Parser, content_hash
 from ingestion.toc_extractor import LlmRefiner, TocEntry, extract_toc
@@ -283,6 +283,32 @@ def _build_section_rows(
     return pairs
 
 
+def _validate_embed_dimension(vectors: list[list[float]]) -> list[list[float]]:
+    """Validate every embedding vector at the embed -> upsert boundary.
+
+    This is the authoritative dimension guard: every vector produced by ANY embedder
+    implementation converges here before points are built, so a bare adapter (one not
+    wrapped in ``FallbackEmbedder``) that returns wrong-dimension vectors is rejected
+    rather than silently upserted into the ``EMBEDDING_DIM``-sized Qdrant collection.
+
+    Args:
+        vectors: Vectors returned by ``embedder.embed(...)``.
+
+    Returns:
+        The same vectors unchanged when every length equals ``EMBEDDING_DIM``.
+
+    Raises:
+        EmbedderDimensionError: If any vector's length differs from ``EMBEDDING_DIM``.
+    """
+    for vector in vectors:
+        if len(vector) != EMBEDDING_DIM:
+            raise EmbedderDimensionError(
+                f"embedder returned a {len(vector)}-dim vector; "
+                f"expected {EMBEDDING_DIM} (Qdrant collection size)."
+            )
+    return vectors
+
+
 def _chunk_point(chunk: Chunk, vector: list[float]) -> dict[str, Any]:
     """Build a Qdrant point dict from a chunk and its embedding.
 
@@ -338,6 +364,8 @@ def ingest_document(
 
     Raises:
         ValueError: When ``tenant_id`` is empty (mandatory IDOR key).
+        EmbedderDimensionError: If the embedder returns any vector whose length is
+            not ``EMBEDDING_DIM`` (authoritative embed -> upsert boundary guard).
         AssertionError: If chunking produces a cross-section chunk (STORY-011).
     """
     if not doc.tenant_id:
@@ -399,7 +427,9 @@ def ingest_document(
 
     chunks_upserted = 0
     if chunks:
-        vectors = embedder.embed([chunk.text for chunk in chunks])
+        vectors = _validate_embed_dimension(
+            embedder.embed([chunk.text for chunk in chunks])
+        )
         points = [
             _chunk_point(chunk, vector)
             for chunk, vector in zip(chunks, vectors, strict=True)

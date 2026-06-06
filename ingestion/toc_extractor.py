@@ -14,7 +14,11 @@ depend on (toc-dsa-delta, AC-002). Three scenarios are supported:
 
 Page-end derivation is identical in A and B: a section ends one page before the
 next sibling's start, and the last section ends at ``total_pages`` (toc-dsa-delta).
-TOC entries are structural metadata (titles + page numbers), never PII.
+An entry whose computed span would be non-positive (the next sibling starts on the
+same or an earlier page) is dropped rather than emitted, so every resolved range is
+both disjoint and valid (``1 <= page_start <= page_end <= total_pages``). The shared
+page's content is still chunked under the sibling that actually spans it, so dropping
+loses no content. TOC entries are structural metadata (titles + page numbers), never PII.
 """
 
 from __future__ import annotations
@@ -87,33 +91,45 @@ _MIN_HEADER_SIZE_RATIO: float = 1.15
 def _derive_page_ranges(
     raw: list[tuple[int, str, int]], total_pages: int
 ) -> tuple[TocEntry, ...]:
-    """Turn ``(level, title, page_start)`` triples into disjoint page ranges.
+    """Turn ``(level, title, page_start)`` triples into disjoint, valid page ranges.
 
-    Each section ends one page before the next entry's start; the final section
-    ends at ``total_pages`` (toc-dsa-delta). Triples are assumed in document order
-    and clamped so ``1 <= page_start <= total_pages``. Ranges are strictly
-    non-overlapping: when the next entry starts on the same (or an earlier) page,
-    the current section's ``page_end`` is set to ``next_start - 1``, which may be
-    less than its ``page_start``. Such an inverted range claims no exclusive page
-    (the chunker collects only pages where ``page_start <= number <= page_end`` and
-    so contributes nothing), guaranteeing no page index appears in two sections.
+    Each surviving section ends one page before the next surviving section's start;
+    the final surviving section ends at ``total_pages`` (toc-dsa-delta). Triples are
+    assumed in document order with non-decreasing start pages, and clamped so
+    ``1 <= page_start <= total_pages``.
+
+    An entry whose start page is not strictly greater than the previous surviving
+    entry's start page (a sibling sharing or preceding that start page) would receive
+    a non-positive span. Rather than emit such an inverted or zero range - which would
+    violate the Postgres ``sections_page_range_valid`` / ``sections_page_start_positive``
+    CHECK constraints and the backend ``Field(ge=1)`` page bounds - the entry is dropped.
+    The shared page's content is still chunked under the surviving sibling that spans it,
+    so dropping loses no content while guaranteeing every emitted range satisfies
+    ``1 <= page_start <= page_end <= total_pages`` and no page index appears twice.
 
     Args:
         raw: Ordered ``(level, title, page_start)`` triples.
         total_pages: Total page count (used for the last section's end).
 
     Returns:
-        Resolved TocEntry tuple with strictly non-overlapping page ranges.
+        Resolved TocEntry tuple with disjoint, always-valid page ranges.
     """
+    bounded_total = max(1, total_pages)
+    survivors: list[tuple[int, str, int]] = []
+    last_start: int | None = None
+    for level, title, page_start in raw:
+        start = max(1, min(page_start, bounded_total))
+        if last_start is None or start > last_start:
+            survivors.append((level, title, start))
+            last_start = start
+
     entries: list[TocEntry] = []
-    count = len(raw)
-    for index, (level, title, page_start) in enumerate(raw):
-        start = max(1, min(page_start, total_pages))
+    count = len(survivors)
+    for index, (level, title, start) in enumerate(survivors):
         if index + 1 < count:
-            next_start = max(1, min(raw[index + 1][2], total_pages))
-            page_end = next_start - 1
+            page_end = survivors[index + 1][2] - 1
         else:
-            page_end = total_pages
+            page_end = bounded_total
         entries.append(
             TocEntry(
                 level=max(1, int(level)),

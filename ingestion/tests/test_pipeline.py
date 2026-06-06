@@ -226,6 +226,108 @@ def test_canonical_id_functions_are_deterministic_and_prefixed() -> None:
     assert doc_id_for("tenant-2", "deadbeef") != doc_id
 
 
+def _same_start_toc_doc() -> ParsedDocument:
+    """A 4-page doc whose native TOC has a parent + child sharing start page 1.
+
+    The cover/parent and its first child both anchor on page 1, and another pair
+    shares page 3, exercising the FIX-1 same-start-page drop end-to-end.
+    """
+    from ingestion.parser import Page
+
+    pages = tuple(
+        Page(number=n, text=" ".join(f"w{n}_{i}" for i in range(130)), blocks=())
+        for n in range(1, 5)
+    )
+    native_toc = (
+        (1, "Cover", 1),
+        (2, "Chapter 1", 1),
+        (1, "Chapter 2", 3),
+        (2, "Section 2.1", 3),
+    )
+    return ParsedDocument(
+        page_count=4, pages=pages, native_toc=native_toc, content_hash=""
+    )
+
+
+def test_same_start_page_toc_persists_only_valid_section_ranges() -> None:
+    """Parent + child sharing a start page never persist an invalid section range.
+
+    FIX-1 regression at the pipeline boundary: every SectionRow written to the section
+    store satisfies ``page_start <= page_end`` and ``page_start >= 1`` (the Postgres
+    CHECK constraints and backend ``Field(ge=1)`` bounds), the returned TOC carries
+    only valid ranges, and the same page is never chunked into two sections.
+    """
+    result, section_store, vector_store = _ingest(
+        _same_start_toc_doc(), data=b"PDF-SAMESTART"
+    )
+
+    rows = [row for rows in section_store.sections.values() for row in rows]
+    assert rows, "at least one valid section must survive"
+    claimed: set[int] = set()
+    for row in rows:
+        assert row.page_start >= 1, f"invalid page_start: {row.page_start}"
+        assert row.page_start <= row.page_end, (
+            f"inverted range persisted: [{row.page_start}, {row.page_end}]"
+        )
+        pages = set(range(row.page_start, row.page_end + 1))
+        assert claimed.isdisjoint(pages), "two sections claim the same page"
+        claimed |= pages
+
+    for entry in result["toc"]:
+        assert entry["page_start"] >= 1
+        assert entry["page_start"] <= entry["page_end"]
+
+    assert len(vector_store.points) == result["chunks_upserted"]
+
+
+class _BareWrongDimEmbedder:
+    """A bare Embedder (not wrapped in FallbackEmbedder) returning wrong-dim vectors.
+
+    Valid per the Embedder Protocol but returns a non-EMBEDDING_DIM length to verify
+    the pipeline embed -> upsert boundary guard rejects ANY embedder implementation.
+    """
+
+    def __init__(self, dim: int = 1024) -> None:
+        """Store the (wrong) output dimension to emit."""
+        self._dim = dim
+
+    @property
+    def dimension(self) -> int:
+        """Report the wrong dimension; the boundary trusts the actual vector length."""
+        return self._dim
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        """Return wrong-length vectors to exercise the pipeline boundary guard."""
+        return [[0.0] * self._dim for _ in texts]
+
+
+def test_bare_wrong_dim_embedder_rejected_at_pipeline_boundary(
+    scenario_a_doc: ParsedDocument,
+) -> None:
+    """A bare embedder returning wrong-dim vectors is rejected at ingest, not upserted.
+
+    FIX-6: the dimension guard lives at the embed -> upsert boundary in the pipeline,
+    so even an embedder NOT wrapped in FallbackEmbedder cannot upsert mismatched
+    vectors into the EMBEDDING_DIM-sized Qdrant collection.
+    """
+    import pytest
+
+    from ingestion.embedder import EmbedderDimensionError
+    from ingestion.pipeline import IngestInput, ingest_document
+
+    vector_store = FakeVectorStore()
+    with pytest.raises(EmbedderDimensionError, match="1024-dim"):
+        ingest_document(
+            IngestInput(data=b"PDF-A", tenant_id="tenant-1"),
+            parser=FakeParser(scenario_a_doc),
+            embedder=_BareWrongDimEmbedder(dim=1024),
+            section_store=FakeSectionStore(),
+            vector_store=vector_store,
+        )
+
+    assert vector_store.points == {}, "no points may be upserted on dimension mismatch"
+
+
 def test_result_dict_has_full_contract_shape(scenario_a_doc: ParsedDocument) -> None:
     """The returned dict matches the agreed interface contract keys exactly."""
     result, _, _ = _ingest(scenario_a_doc, data=b"PDF-A")

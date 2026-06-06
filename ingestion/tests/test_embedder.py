@@ -35,6 +35,40 @@ class _FailingPrimary:
         raise RuntimeError("primary unavailable")
 
 
+class _NonRuntimeErrorPrimary:
+    """Primary embedder that raises a non-RuntimeError (e.g. a library/connection error).
+
+    Models exceptions like ``openai.APIConnectionError`` or ``ValueError`` that are not
+    ``RuntimeError`` and previously skipped the fallback path.
+    """
+
+    def __init__(self, exc: Exception | None = None) -> None:
+        """Store the exception to raise (defaults to a plain ValueError)."""
+        self._exc = exc or ValueError("transient library error")
+
+    @property
+    def dimension(self) -> int:
+        """Return the required dimension."""
+        return EMBEDDING_DIM
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        """Raise the configured non-RuntimeError to exercise the broadened fallback."""
+        raise self._exc
+
+
+class _DimErrorPrimary:
+    """Primary embedder that returns wrong-dim vectors, tripping the dimension guard."""
+
+    @property
+    def dimension(self) -> int:
+        """Report EMBEDDING_DIM though embed() returns a wrong length."""
+        return EMBEDDING_DIM
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        """Return wrong-length vectors so _validate_dimension raises."""
+        return [[0.0] * (EMBEDDING_DIM + 1) for _ in texts]
+
+
 class _WrongDimEmbedder:
     """Embedder that returns vectors of a non-EMBEDDING_DIM length (e.g. BGE 1024)."""
 
@@ -111,6 +145,36 @@ def test_primary_with_wrong_dim_raises() -> None:
     )
 
     with pytest.raises(EmbedderDimensionError, match="512-dim"):
+        fallback.embed(["only"])
+
+
+def test_fallback_on_non_runtime_error_from_primary() -> None:
+    """A non-RuntimeError from the primary still degrades to the secondary.
+
+    FIX-7: FallbackEmbedder previously caught only RuntimeError, so a library or
+    connection error (e.g. openai.APIConnectionError, ValueError) propagated and
+    skipped the BGE-M3 fallback. Catching Exception now degrades gracefully.
+    """
+    fallback = FallbackEmbedder(
+        primary=_NonRuntimeErrorPrimary(ValueError("library blew up")),
+        fallback=FakeEmbedder(),
+    )
+
+    vectors = fallback.embed(["only"])
+
+    assert len(vectors) == 1
+    assert len(vectors[0]) == EMBEDDING_DIM
+
+
+def test_primary_dimension_error_not_swallowed_into_silent_fallback() -> None:
+    """A primary dimension mismatch propagates rather than masking a misconfiguration.
+
+    FIX-7: broadening the catch to Exception must NOT hide a real dimension
+    misconfiguration behind a silent fallback; EmbedderDimensionError is re-raised.
+    """
+    fallback = FallbackEmbedder(primary=_DimErrorPrimary(), fallback=FakeEmbedder())
+
+    with pytest.raises(EmbedderDimensionError):
         fallback.embed(["only"])
 
 

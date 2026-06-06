@@ -79,32 +79,59 @@ def test_scenario_c_returns_fallback_only(scenario_c_doc: ParsedDocument) -> Non
     assert result.entries == ()
 
 
-def test_same_start_page_siblings_yield_disjoint_ranges() -> None:
-    """Two entries sharing a start page produce strictly non-overlapping ranges.
+def test_same_start_page_siblings_yield_valid_disjoint_ranges() -> None:
+    """Two entries sharing a start page yield only valid, strictly disjoint ranges.
 
-    FIX-4: ``page_end = max(start, next_start - 1)`` previously let entry A=[2,2]
-    and B=[2,3] both include page 2 (duplicate content). With disjoint ranges, the
-    shared-start entry claims no exclusive page (inverted/empty range) so no page
-    index appears in two sections.
+    FIX-1 regression: ``page_end = next_start - 1`` previously emitted an inverted
+    range (``page_end < page_start``) for the earlier same-start sibling, violating
+    the Postgres ``sections_page_range_valid`` CHECK and the backend ``Field(ge=1)``
+    page bounds. The shared-start sibling is now dropped, so every emitted range is
+    valid (``page_start <= page_end`` and ``page_start >= 1``) and disjoint -- no page
+    index appears in two sections, and no inverted/zero range is produced.
     """
     raw = [(1, "A", 2), (1, "B", 2)]
     entries = _derive_page_ranges(raw, total_pages=3)
 
-    a_pages = set(range(entries[0].page_start, entries[0].page_end + 1))
-    b_pages = set(range(entries[1].page_start, entries[1].page_end + 1))
-    assert a_pages.isdisjoint(b_pages), (
-        f"ranges overlap: A={a_pages}, B={b_pages}"
-    )
-    assert entries[1].page_start == 2
-    assert entries[1].page_end == 3
+    assert len(entries) == 1, "the shared-start sibling must be dropped, not emitted"
+    for entry in entries:
+        assert entry.page_start >= 1
+        assert entry.page_start <= entry.page_end
+        assert entry.page_end <= 3
+
+    claimed: set[int] = set()
+    for entry in entries:
+        pages = set(range(entry.page_start, entry.page_end + 1))
+        assert claimed.isdisjoint(pages), "ranges overlap across sections"
+        claimed |= pages
+
+    assert entries[-1].page_end == 3, "last surviving entry must end at total_pages"
+
+
+def test_cover_and_chapter_both_on_page_one_no_zero_page_end() -> None:
+    """Cover + chapter both starting on page 1 never yield ``page_end = 0``.
+
+    FIX-1 regression: when two consecutive entries both start on page 1, the earlier
+    one previously received ``page_end = 1 - 1 = 0``, violating both page CHECK
+    constraints. The earlier same-start entry is dropped, so no zero/invalid range
+    is emitted and the surviving entry still ends at total_pages.
+    """
+    raw = [(1, "Cover", 1), (1, "Chapter 1", 1)]
+    entries = _derive_page_ranges(raw, total_pages=5)
+
+    assert len(entries) == 1
+    for entry in entries:
+        assert entry.page_end >= 1, "no entry may have page_end == 0"
+        assert entry.page_start >= 1
+        assert entry.page_start <= entry.page_end
+    assert entries[-1].page_end == 5
 
 
 def test_same_start_page_siblings_produce_no_duplicate_chunks() -> None:
     """Same-start-page siblings do not chunk the shared page into two sections.
 
-    FIX-4: end-to-end check that the inverted (empty) range of the shared-start
-    sibling yields zero chunks, so page 2's content is chunked under exactly one
-    section -- no duplicate chunk text across the two sections.
+    FIX-1 end-to-end: with the shared-start sibling dropped, no section carries an
+    invalid range and page 2's content is chunked under exactly one section, so there
+    is no duplicate chunk text across sections and nothing invalid would be persisted.
     """
     pages = tuple(
         Page(number=n, text=" ".join(f"w{n}_{i}" for i in range(120)), blocks=())
@@ -113,6 +140,10 @@ def test_same_start_page_siblings_produce_no_duplicate_chunks() -> None:
     doc = ParsedDocument(page_count=3, pages=pages, native_toc=(), content_hash="")
     entries = _derive_page_ranges([(1, "A", 2), (1, "B", 2)], total_pages=3)
     sections = [(f"sec_{i}", entry) for i, entry in enumerate(entries)]
+
+    for entry in entries:
+        assert entry.page_start <= entry.page_end
+        assert entry.page_start >= 1
 
     chunks = chunk_document(doc, sections, doc_id="doc_x", tenant_id="t1")
 

@@ -177,9 +177,13 @@ class BgeM3Embedder:
 class FallbackEmbedder:
     """Primary embedder with an automatic fallback on primary failure.
 
-    Tries the primary adapter (OpenAI) first; on any ``RuntimeError`` (missing
-    key, provider error) it falls back to the secondary adapter (BGE-M3),
-    realizing the ADR-6 primary-plus-multilingual-fallback policy.
+    Tries the primary adapter (OpenAI) first; on any transient or library
+    ``Exception`` (missing key, provider/network error, client library error) it
+    falls back to the secondary adapter (BGE-M3), realizing the ADR-6
+    primary-plus-multilingual-fallback policy. A dimension mismatch
+    (``EmbedderDimensionError``) is a misconfiguration, not a transient failure, so
+    it propagates instead of being masked by a silent fallback - the authoritative
+    dimension guard lives at the pipeline embed -> upsert boundary.
     """
 
     def __init__(self, primary: Embedder, fallback: Embedder) -> None:
@@ -200,10 +204,13 @@ class FallbackEmbedder:
     def embed(self, texts: list[str]) -> list[list[float]]:
         """Embed via the primary, falling back to the secondary on failure.
 
-        Validates the returned vector length on BOTH paths so a wrong-dimension
-        model (e.g. native 1024-dim BGE-M3) can never silently upsert mismatched
-        vectors into the 1536-dim Qdrant collection. Fallback activation is logged
-        at WARNING so the model swap is auditable rather than silent.
+        Any transient or library exception from the primary (missing key,
+        provider/network error, client library error) degrades to the fallback,
+        logged at WARNING so the model swap is auditable. A dimension mismatch is a
+        misconfiguration, not a transient failure: ``EmbedderDimensionError`` is
+        re-raised rather than masked by a silent fallback. The returned vector length
+        is validated on both paths as defense in depth; the authoritative dimension
+        guard is the pipeline embed -> upsert boundary, which validates ANY embedder.
 
         Args:
             texts: Chunk texts to embed.
@@ -213,11 +220,13 @@ class FallbackEmbedder:
 
         Raises:
             EmbedderDimensionError: If the chosen embedder returns a vector whose
-                length is not ``EMBEDDING_DIM``.
+                length is not ``EMBEDDING_DIM``; not swallowed into a silent fallback.
         """
         try:
             return _validate_dimension(self._primary.embed(texts), source="primary embedder")
-        except RuntimeError as exc:
+        except EmbedderDimensionError:
+            raise
+        except Exception as exc:
             logger.warning(
                 "Primary embedder unavailable (%s); activating fallback embedder.",
                 exc,
