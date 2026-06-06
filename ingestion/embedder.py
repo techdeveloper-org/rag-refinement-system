@@ -10,10 +10,14 @@ match the Qdrant collection vector size (``db.qdrant_bootstrap.VECTOR_SIZE``,
 
 from __future__ import annotations
 
+import logging
 import os
 from typing import Protocol, runtime_checkable
 
 from db.qdrant_bootstrap import VECTOR_SIZE
+
+logger = logging.getLogger(__name__)
+"""Module logger; fallback activation is logged here at WARNING for auditability."""
 
 EMBEDDING_DIM: int = VECTOR_SIZE
 """Required embedding dimensionality (matches the Qdrant collection, ADR-6)."""
@@ -23,6 +27,38 @@ OPENAI_MODEL: str = "text-embedding-3-small"
 
 BGE_M3_MODEL: str = "BAAI/bge-m3"
 """Multilingual fallback embedding model id (ADR-6)."""
+
+
+class EmbedderDimensionError(ValueError):
+    """Raised when an embedder returns vectors whose length is not ``EMBEDDING_DIM``.
+
+    Guards the AGREED CONTRACT that every vector upserted into Qdrant matches the
+    collection's 1536-dim size (ADR-6). BGE-M3 is natively 1024-dim, so a fallback
+    that silently returned its vectors would corrupt the 1536-dim collection; this
+    typed error makes the mismatch loud instead of silently wrong.
+    """
+
+
+def _validate_dimension(vectors: list[list[float]], *, source: str) -> list[list[float]]:
+    """Validate that every vector has exactly ``EMBEDDING_DIM`` components.
+
+    Args:
+        vectors: Vectors returned by an embedder.
+        source: Human-readable label of the producing embedder (for the error).
+
+    Returns:
+        The same vectors unchanged when every length equals ``EMBEDDING_DIM``.
+
+    Raises:
+        EmbedderDimensionError: If any vector's length differs from ``EMBEDDING_DIM``.
+    """
+    for vector in vectors:
+        if len(vector) != EMBEDDING_DIM:
+            raise EmbedderDimensionError(
+                f"{source} returned a {len(vector)}-dim vector; "
+                f"expected {EMBEDDING_DIM} (Qdrant collection size)."
+            )
+    return vectors
 
 
 @runtime_checkable
@@ -164,13 +200,28 @@ class FallbackEmbedder:
     def embed(self, texts: list[str]) -> list[list[float]]:
         """Embed via the primary, falling back to the secondary on failure.
 
+        Validates the returned vector length on BOTH paths so a wrong-dimension
+        model (e.g. native 1024-dim BGE-M3) can never silently upsert mismatched
+        vectors into the 1536-dim Qdrant collection. Fallback activation is logged
+        at WARNING so the model swap is auditable rather than silent.
+
         Args:
             texts: Chunk texts to embed.
 
         Returns:
-            One vector per input text from whichever embedder succeeded.
+            One ``EMBEDDING_DIM``-length vector per input text.
+
+        Raises:
+            EmbedderDimensionError: If the chosen embedder returns a vector whose
+                length is not ``EMBEDDING_DIM``.
         """
         try:
-            return self._primary.embed(texts)
-        except RuntimeError:
-            return self._fallback.embed(texts)
+            return _validate_dimension(self._primary.embed(texts), source="primary embedder")
+        except RuntimeError as exc:
+            logger.warning(
+                "Primary embedder unavailable (%s); activating fallback embedder.",
+                exc,
+            )
+            return _validate_dimension(
+                self._fallback.embed(texts), source="fallback embedder"
+            )

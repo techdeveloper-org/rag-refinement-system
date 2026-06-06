@@ -29,11 +29,16 @@ from typing import Any, Protocol, runtime_checkable
 
 from ingestion.chunker import Chunk, chunk_document
 from ingestion.embedder import Embedder
+from ingestion.ids import doc_id_for, section_id_for
 from ingestion.parser import Parser, content_hash
 from ingestion.toc_extractor import LlmRefiner, TocEntry, extract_toc
 
 _DOC_ID_NAMESPACE = uuid.UUID("6ba7b811-9dad-11d1-80b4-00c04fd430c8")
-"""Stable namespace so a content hash maps to a deterministic doc_id (idempotency)."""
+"""Stable namespace so a content hash maps to a deterministic doc_id (idempotency).
+
+Retained for backward-compatible imports; the authoritative id format now lives in
+``ingestion.ids`` (the single source of truth shared with the backend adapter).
+"""
 
 
 @dataclass(frozen=True)
@@ -197,32 +202,36 @@ class IngestResult:
 
 
 def _deterministic_doc_id(tenant_id: str, content_hash_value: str) -> str:
-    """Derive a stable ``doc_id`` from tenant + content hash.
+    """Derive the canonical, prefixed ``doc_id`` from tenant + content hash.
 
-    Ensures a re-upload of identical content for the same tenant maps to the same
-    document id even before the store dedup lookup (defense in depth, OAQ-1).
+    Thin wrapper over the single source of truth ``ingestion.ids.doc_id_for`` so
+    the pipeline and backend adapter never diverge. Ensures a re-upload of
+    identical content for the same tenant maps to the same document id even before
+    the store dedup lookup (defense in depth, OAQ-1).
 
     Args:
         tenant_id: Owning tenant.
         content_hash_value: SHA-256 content hash.
 
     Returns:
-        A deterministic UUID5 string used as ``doc_id``.
+        A deterministic ``doc_<32 hex>`` id matching ``^doc_[A-Za-z0-9]{6,}$``.
     """
-    return str(uuid.uuid5(_DOC_ID_NAMESPACE, f"{tenant_id}:{content_hash_value}"))
+    return doc_id_for(tenant_id, content_hash_value)
 
 
 def _section_id(doc_id: str, ordinal: int) -> str:
-    """Derive a stable ``section_id`` for the nth section of a document.
+    """Derive the canonical, prefixed ``section_id`` for the nth section.
+
+    Thin wrapper over the single source of truth ``ingestion.ids.section_id_for``.
 
     Args:
         doc_id: Owning document id.
         ordinal: Zero-based section ordinal.
 
     Returns:
-        A deterministic UUID5 string used as ``section_id``.
+        A deterministic ``sec_<32 hex>`` id matching ``^sec_[A-Za-z0-9]+$``.
     """
-    return str(uuid.uuid5(_DOC_ID_NAMESPACE, f"{doc_id}:section:{ordinal}"))
+    return section_id_for(doc_id, ordinal)
 
 
 def _toc_to_dicts(entries: tuple[TocEntry, ...]) -> list[dict[str, Any]]:

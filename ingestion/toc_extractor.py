@@ -87,18 +87,23 @@ _MIN_HEADER_SIZE_RATIO: float = 1.15
 def _derive_page_ranges(
     raw: list[tuple[int, str, int]], total_pages: int
 ) -> tuple[TocEntry, ...]:
-    """Turn ``(level, title, page_start)`` triples into contiguous page ranges.
+    """Turn ``(level, title, page_start)`` triples into disjoint page ranges.
 
     Each section ends one page before the next entry's start; the final section
-    ends at ``total_pages`` (toc-dsa-delta). Triples are assumed in document
-    order and clamped so ``1 <= page_start <= page_end <= total_pages``.
+    ends at ``total_pages`` (toc-dsa-delta). Triples are assumed in document order
+    and clamped so ``1 <= page_start <= total_pages``. Ranges are strictly
+    non-overlapping: when the next entry starts on the same (or an earlier) page,
+    the current section's ``page_end`` is set to ``next_start - 1``, which may be
+    less than its ``page_start``. Such an inverted range claims no exclusive page
+    (the chunker collects only pages where ``page_start <= number <= page_end`` and
+    so contributes nothing), guaranteeing no page index appears in two sections.
 
     Args:
         raw: Ordered ``(level, title, page_start)`` triples.
         total_pages: Total page count (used for the last section's end).
 
     Returns:
-        Resolved TocEntry tuple with non-overlapping, contiguous page ranges.
+        Resolved TocEntry tuple with strictly non-overlapping page ranges.
     """
     entries: list[TocEntry] = []
     count = len(raw)
@@ -106,7 +111,7 @@ def _derive_page_ranges(
         start = max(1, min(page_start, total_pages))
         if index + 1 < count:
             next_start = max(1, min(raw[index + 1][2], total_pages))
-            page_end = max(start, next_start - 1)
+            page_end = next_start - 1
         else:
             page_end = total_pages
         entries.append(

@@ -8,15 +8,48 @@ when the primary raises.
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 
 from ingestion.embedder import (
     EMBEDDING_DIM,
     Embedder,
+    EmbedderDimensionError,
     FallbackEmbedder,
     OpenAIEmbedder,
 )
 from ingestion.tests.conftest import FakeEmbedder
+
+
+class _FailingPrimary:
+    """Primary embedder that always raises RuntimeError (forces the fallback)."""
+
+    @property
+    def dimension(self) -> int:
+        """Return the required dimension."""
+        return EMBEDDING_DIM
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        """Always fail to trigger the fallback path."""
+        raise RuntimeError("primary unavailable")
+
+
+class _WrongDimEmbedder:
+    """Embedder that returns vectors of a non-EMBEDDING_DIM length (e.g. BGE 1024)."""
+
+    def __init__(self, dim: int = 1024) -> None:
+        """Store the (wrong) output dimension to emit."""
+        self._dim = dim
+
+    @property
+    def dimension(self) -> int:
+        """Report EMBEDDING_DIM even though embed() returns a wrong length."""
+        return EMBEDDING_DIM
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        """Return wrong-length vectors to exercise the dimension guard."""
+        return [[0.0] * self._dim for _ in texts]
 
 
 def test_fake_embedder_satisfies_protocol_and_dimension() -> None:
@@ -40,22 +73,55 @@ def test_openai_embedder_requires_env_key(monkeypatch: pytest.MonkeyPatch) -> No
 
 def test_fallback_embedder_uses_secondary_when_primary_fails() -> None:
     """FallbackEmbedder returns the secondary's vectors when the primary raises."""
-
-    class FailingPrimary:
-        """Primary embedder that always raises RuntimeError."""
-
-        @property
-        def dimension(self) -> int:
-            """Return the required dimension."""
-            return EMBEDDING_DIM
-
-        def embed(self, texts: list[str]) -> list[list[float]]:
-            """Always fail to trigger the fallback path."""
-            raise RuntimeError("primary unavailable")
-
-    fallback = FallbackEmbedder(primary=FailingPrimary(), fallback=FakeEmbedder())
+    fallback = FallbackEmbedder(primary=_FailingPrimary(), fallback=FakeEmbedder())
 
     vectors = fallback.embed(["only"])
 
     assert len(vectors) == 1
     assert len(vectors[0]) == EMBEDDING_DIM
+
+
+def test_fallback_with_correct_dim_passes() -> None:
+    """A fallback that returns EMBEDDING_DIM vectors passes the dimension guard."""
+    fallback = FallbackEmbedder(primary=_FailingPrimary(), fallback=FakeEmbedder())
+
+    vectors = fallback.embed(["a", "b"])
+
+    assert all(len(vector) == EMBEDDING_DIM for vector in vectors)
+
+
+def test_fallback_with_wrong_dim_raises() -> None:
+    """A fallback returning a non-EMBEDDING_DIM vector raises EmbedderDimensionError.
+
+    FIX-2: BGE-M3 is natively 1024-dim; silently upserting its vectors into the
+    1536-dim Qdrant collection corrupts it. The mismatch is now a typed error.
+    """
+    fallback = FallbackEmbedder(
+        primary=_FailingPrimary(), fallback=_WrongDimEmbedder(dim=1024)
+    )
+
+    with pytest.raises(EmbedderDimensionError, match="1024-dim"):
+        fallback.embed(["only"])
+
+
+def test_primary_with_wrong_dim_raises() -> None:
+    """A primary returning a non-EMBEDDING_DIM vector also raises (both paths guarded)."""
+    fallback = FallbackEmbedder(
+        primary=_WrongDimEmbedder(dim=512), fallback=FakeEmbedder()
+    )
+
+    with pytest.raises(EmbedderDimensionError, match="512-dim"):
+        fallback.embed(["only"])
+
+
+def test_fallback_activation_is_logged_at_warning(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The fallback swap is logged at WARNING so the model change is auditable."""
+    fallback = FallbackEmbedder(primary=_FailingPrimary(), fallback=FakeEmbedder())
+
+    with caplog.at_level(logging.WARNING, logger="ingestion.embedder"):
+        fallback.embed(["only"])
+
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert any("fallback" in r.getMessage().lower() for r in warnings)

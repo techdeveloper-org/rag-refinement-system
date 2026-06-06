@@ -7,8 +7,9 @@ are contiguous, non-overlapping, and end at total_pages.
 
 from __future__ import annotations
 
-from ingestion.parser import ParsedDocument
-from ingestion.toc_extractor import TocEntry, extract_toc
+from ingestion.chunker import chunk_document
+from ingestion.parser import Page, ParsedDocument
+from ingestion.toc_extractor import TocEntry, _derive_page_ranges, extract_toc
 
 
 def test_scenario_a_uses_native_bookmarks(scenario_a_doc: ParsedDocument) -> None:
@@ -76,3 +77,47 @@ def test_scenario_c_returns_fallback_only(scenario_c_doc: ParsedDocument) -> Non
     assert result.scenario == "C"
     assert result.fallback_only is True
     assert result.entries == ()
+
+
+def test_same_start_page_siblings_yield_disjoint_ranges() -> None:
+    """Two entries sharing a start page produce strictly non-overlapping ranges.
+
+    FIX-4: ``page_end = max(start, next_start - 1)`` previously let entry A=[2,2]
+    and B=[2,3] both include page 2 (duplicate content). With disjoint ranges, the
+    shared-start entry claims no exclusive page (inverted/empty range) so no page
+    index appears in two sections.
+    """
+    raw = [(1, "A", 2), (1, "B", 2)]
+    entries = _derive_page_ranges(raw, total_pages=3)
+
+    a_pages = set(range(entries[0].page_start, entries[0].page_end + 1))
+    b_pages = set(range(entries[1].page_start, entries[1].page_end + 1))
+    assert a_pages.isdisjoint(b_pages), (
+        f"ranges overlap: A={a_pages}, B={b_pages}"
+    )
+    assert entries[1].page_start == 2
+    assert entries[1].page_end == 3
+
+
+def test_same_start_page_siblings_produce_no_duplicate_chunks() -> None:
+    """Same-start-page siblings do not chunk the shared page into two sections.
+
+    FIX-4: end-to-end check that the inverted (empty) range of the shared-start
+    sibling yields zero chunks, so page 2's content is chunked under exactly one
+    section -- no duplicate chunk text across the two sections.
+    """
+    pages = tuple(
+        Page(number=n, text=" ".join(f"w{n}_{i}" for i in range(120)), blocks=())
+        for n in range(1, 4)
+    )
+    doc = ParsedDocument(page_count=3, pages=pages, native_toc=(), content_hash="")
+    entries = _derive_page_ranges([(1, "A", 2), (1, "B", 2)], total_pages=3)
+    sections = [(f"sec_{i}", entry) for i, entry in enumerate(entries)]
+
+    chunks = chunk_document(doc, sections, doc_id="doc_x", tenant_id="t1")
+
+    texts_by_section: dict[str, list[str]] = {}
+    for chunk in chunks:
+        texts_by_section.setdefault(chunk.section_id, []).append(chunk.text)
+    all_texts = [t for texts in texts_by_section.values() for t in texts]
+    assert len(all_texts) == len(set(all_texts)), "duplicate chunk text across sections"

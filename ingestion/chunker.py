@@ -23,7 +23,8 @@ from ingestion.parser import ParsedDocument
 from ingestion.toc_extractor import TocEntry
 
 MIN_CHUNK_TOKENS: int = 100
-"""Lower bound on chunk size; smaller trailing chunks are merged where possible."""
+"""Soft lower bound on chunk size; a sub-MIN remainder is allowed only as the final
+chunk at a section end (the MAX upper bound is always hard, never the MIN)."""
 
 MAX_CHUNK_TOKENS: int = 512
 """Upper bound on chunk size (token budget per chunk)."""
@@ -117,11 +118,12 @@ def chunk_section(
 ) -> list[Chunk]:
     """Chunk a single section's text within its page range only.
 
-    Words are grouped into windows of at most ``MAX_CHUNK_TOKENS`` tokens; a
-    trailing window below ``MIN_CHUNK_TOKENS`` is merged into the previous chunk
-    when one exists so very small fragments do not proliferate. Page attribution
-    uses the page on which the window's first word lies, and is always within the
-    section's range.
+    Words are grouped into windows of at most ``MAX_CHUNK_TOKENS`` tokens. The hard
+    invariant is that no emitted chunk ever exceeds ``MAX_CHUNK_TOKENS``; a trailing
+    remainder below ``MIN_CHUNK_TOKENS`` is emitted as its own short final chunk at
+    the section end rather than extending the prior window past the maximum. Page
+    attribution uses the page on which the window's first word lies, and is always
+    within the section's range.
 
     Args:
         doc: Parsed document.
@@ -149,9 +151,6 @@ def chunk_section(
     total = len(page_words)
     while cursor < total:
         window = page_words[cursor : cursor + MAX_CHUNK_TOKENS]
-        remaining = total - (cursor + len(window))
-        if 0 < remaining < MIN_CHUNK_TOKENS:
-            window = page_words[cursor:total]
         start_page = window[0][0]
         text = " ".join(word for _, word in window)
         chunk_id = _chunk_id(doc_id, resolved_section_id, start_page, ordinal, text)

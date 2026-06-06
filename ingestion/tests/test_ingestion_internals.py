@@ -87,16 +87,25 @@ class TestSectionBoundaryGuard:
 class TestChunkSection:
     """Window sizing and the trailing-merge branch."""
 
-    def test_trailing_small_window_merges_into_previous(self) -> None:
-        """A trailing window below MIN_CHUNK_TOKENS merges into the prior chunk."""
+    def test_trailing_small_window_emitted_without_exceeding_max(self) -> None:
+        """A trailing remainder below MIN is its own short final chunk, never > MAX.
+
+        FIX-3: extending the prior window past MAX (previously up to
+        ``MAX + MIN - 1`` = 611 words) violated the 100-512 invariant. The tail is
+        now emitted as a separate sub-MIN final chunk so no chunk exceeds MAX.
+        """
         word_count = chunker_mod.MAX_CHUNK_TOKENS + 10
         body = " ".join(f"w{i}" for i in range(word_count))
         page = Page(number=1, text=body, blocks=())
         doc = _doc([page])
         entry = TocEntry(level=1, title="S", page_start=1, page_end=1)
         chunks = chunk_section(doc, entry, "doc_1", "tenant_a", section_id="sec_1")
-        assert len(chunks) == 1
-        assert chunks[0].token_count == word_count
+        assert len(chunks) == 2
+        assert chunks[0].token_count == chunker_mod.MAX_CHUNK_TOKENS
+        assert chunks[1].token_count == 10
+        assert sum(c.token_count for c in chunks) == word_count
+        for chunk in chunks:
+            assert chunk.token_count <= chunker_mod.MAX_CHUNK_TOKENS
 
     def test_resolved_section_id_derived_when_omitted(self) -> None:
         """When no section_id is passed, a deterministic id is derived."""

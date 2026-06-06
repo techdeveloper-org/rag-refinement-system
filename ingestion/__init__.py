@@ -20,9 +20,11 @@ from ingestion.embedder import (
     EMBEDDING_DIM,
     BgeM3Embedder,
     Embedder,
+    EmbedderDimensionError,
     FallbackEmbedder,
     OpenAIEmbedder,
 )
+from ingestion.ids import doc_id_for, section_id_for
 from ingestion.parser import (
     Page,
     ParsedDocument,
@@ -68,7 +70,10 @@ __all__ = [
     "chunk_section",
     "Embedder",
     "EMBEDDING_DIM",
+    "EmbedderDimensionError",
     "OpenAIEmbedder",
     "BgeM3Embedder",
     "FallbackEmbedder",
+    "doc_id_for",
+    "section_id_for",
 ]

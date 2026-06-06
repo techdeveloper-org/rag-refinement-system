@@ -12,6 +12,9 @@ All dependencies are injected fakes - no network, no real key, no live database.
 
 from __future__ import annotations
 
+import re
+
+from ingestion import doc_id_for, section_id_for
 from ingestion.parser import ParsedDocument
 from ingestion.pipeline import IngestInput, ingest_document
 from ingestion.tests.conftest import (
@@ -20,6 +23,12 @@ from ingestion.tests.conftest import (
     FakeSectionStore,
     FakeVectorStore,
 )
+
+_DOC_ID_PATTERN = re.compile(r"^doc_[A-Za-z0-9]{6,}$")
+"""Backend document id schema (``schemas.py``)."""
+
+_SECTION_ID_PATTERN = re.compile(r"^sec_[A-Za-z0-9]+$")
+"""Backend + router section id schema."""
 
 
 def _ingest(
@@ -158,6 +167,63 @@ def test_empty_tenant_id_is_rejected(scenario_a_doc: ParsedDocument) -> None:
             section_store=FakeSectionStore(),
             vector_store=FakeVectorStore(),
         )
+
+
+def test_doc_id_matches_backend_schema_pattern(
+    scenario_a_doc: ParsedDocument,
+) -> None:
+    """The pipeline's doc_id is prefixed + hyphen-free (matches ^doc_[A-Za-z0-9]{6,}$).
+
+    FIX-1: a bare uuid5 string (hyphenated, no prefix) failed the backend document
+    schema, the backend section schema, and the router section filter, 500-ing on
+    every real document. The id is now ``doc_<32 hex>``.
+    """
+    result, _, _ = _ingest(scenario_a_doc, data=b"PDF-A")
+
+    assert _DOC_ID_PATTERN.match(result["doc_id"]), result["doc_id"]
+    assert "-" not in result["doc_id"]
+
+
+def test_section_ids_match_backend_and_router_schema_pattern(
+    scenario_a_doc: ParsedDocument,
+) -> None:
+    """Every persisted section_id matches ^sec_[A-Za-z0-9]+$ (backend + router)."""
+    _, section_store, _ = _ingest(scenario_a_doc, data=b"PDF-A")
+
+    rows = [row for rows in section_store.sections.values() for row in rows]
+    assert rows
+    for row in rows:
+        assert _SECTION_ID_PATTERN.match(row.section_id), row.section_id
+        assert "-" not in row.section_id
+
+
+def test_chunk_payload_ids_match_schema_patterns(
+    scenario_a_doc: ParsedDocument,
+) -> None:
+    """Each chunk payload's doc_id/section_id carry the prefixed, hyphen-free shape."""
+    _, _, vector_store = _ingest(scenario_a_doc, data=b"PDF-A")
+
+    assert vector_store.points
+    for point in vector_store.points.values():
+        payload = point["payload"]
+        assert _DOC_ID_PATTERN.match(payload["doc_id"]), payload["doc_id"]
+        assert _SECTION_ID_PATTERN.match(payload["section_id"]), payload["section_id"]
+
+
+def test_canonical_id_functions_are_deterministic_and_prefixed() -> None:
+    """The exported canonical id functions are deterministic and correctly shaped.
+
+    FIX-1: ``doc_id_for`` / ``section_id_for`` are the single source of truth the
+    backend adapter imports, so their format can never diverge from the pipeline.
+    """
+    doc_id = doc_id_for("tenant-1", "deadbeef")
+    again = doc_id_for("tenant-1", "deadbeef")
+    section_id = section_id_for(doc_id, 0)
+
+    assert doc_id == again
+    assert _DOC_ID_PATTERN.match(doc_id), doc_id
+    assert _SECTION_ID_PATTERN.match(section_id), section_id
+    assert doc_id_for("tenant-2", "deadbeef") != doc_id
 
 
 def test_result_dict_has_full_contract_shape(scenario_a_doc: ParsedDocument) -> None:
