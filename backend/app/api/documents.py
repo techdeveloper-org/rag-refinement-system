@@ -52,6 +52,27 @@ _RESIDENCY_REGIONS = {"IN", "EU", "US", "GLOBAL"}
 _UPLOAD_CHUNK_BYTES = 1 * 1024 * 1024
 
 
+def _is_pdf_content_type(content_type: str | None) -> bool:
+    """Return whether a request content type names the PDF media type (FIX-10).
+
+    Normalizes the raw header before comparing: parameters after the first
+    semicolon (for example ``charset=binary``) are stripped and the bare media
+    type is trimmed and lowercased, so ``application/pdf; charset=utf-8`` and
+    ``application/pdf;`` are accepted while a missing/empty header or a genuinely
+    different type is rejected.
+
+    Args:
+        content_type: The raw request ``Content-Type`` header value, if any.
+
+    Returns:
+        True when the bare media type is ``application/pdf``; False otherwise.
+    """
+    if not content_type:
+        return False
+    bare_type = content_type.split(";", 1)[0].strip().lower()
+    return bare_type == _PDF_CONTENT_TYPE
+
+
 def _now_iso() -> str:
     """Return the current UTC time as an ISO-8601 string.
 
@@ -171,7 +192,7 @@ async def ingest_document(
         ProblemException: 415 for a non-PDF upload; 422 for an invalid
             residency region; 503 when ingestion is unreachable.
     """
-    if not file.content_type or file.content_type != _PDF_CONTENT_TYPE:
+    if not _is_pdf_content_type(file.content_type):
         raise unsupported_media_type()
     if residency_region not in _RESIDENCY_REGIONS:
         raise validation_error(

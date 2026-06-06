@@ -40,27 +40,47 @@ def _merge_fairly(
 
     Every contributing document is represented before any document receives a
     second slot, then the remaining slots are filled by descending confidence.
-    Ordering is fully deterministic (confidence desc, then ``document_id``, then
-    ``section_id``) so the result never depends on the input document order, and a
-    single saturating document cannot crowd out the others. Single-document
-    routing is unchanged (plain confidence order).
+    Ties are broken by the router's original emission order (the position of each
+    section in ``sections``), so the result never depends on the input document
+    order and a single saturating document cannot crowd out the others while
+    equal-confidence sections keep the exact order the router emitted them.
+
+    Single-document routing is unchanged from the pre-fairness behavior: with one
+    contributing document every section shares the same group, so the output is
+    the router's emitted order sorted only by descending confidence with the
+    emission index as a stable tiebreaker (no reordering of tied sections).
+
+    When more contributing documents are present than ``max_sections``, not every
+    document can be represented; the highest-confidence representatives (with the
+    emission-order tiebreak) fill the available slots.
+
+    The ``document_id`` group key coalesces ``None`` to ``""`` so a section with
+    an unset owning document is grouped and ordered safely (FIX-8); the live
+    routing path always stamps a non-None id, so this only hardens the helper.
 
     Args:
-        sections: All routed sections across the target documents.
+        sections: All routed sections across the target documents, in the
+            router's emission order.
         max_sections: Maximum number of sections to return.
 
     Returns:
         The fairly merged, capped section list.
     """
+    order_by_id = {id(section): index for index, section in enumerate(sections)}
+
+    def _emission_index(section: RoutedSection) -> int:
+        """Return the router's emission position for stable tie ordering."""
+        return order_by_id[id(section)]
+
     by_doc: dict[str, list[RoutedSection]] = {}
     for section in sections:
-        by_doc.setdefault(section.document_id, []).append(section)
+        by_doc.setdefault(section.document_id or "", []).append(section)
     for grouped in by_doc.values():
-        grouped.sort(key=lambda s: (-s.confidence, s.section_id))
+        grouped.sort(key=lambda s: (-s.confidence, _emission_index(s)))
     representatives = [grouped[0] for grouped in by_doc.values()]
     remainder = [section for grouped in by_doc.values() for section in grouped[1:]]
-    representatives.sort(key=lambda s: (-s.confidence, s.document_id, s.section_id))
-    remainder.sort(key=lambda s: (-s.confidence, s.document_id, s.section_id))
+    representatives.sort(key=lambda s: (-s.confidence, _emission_index(s)))
+    remainder.sort(key=lambda s: (-s.confidence, _emission_index(s)))
     return (representatives + remainder)[:max_sections]
 
 
@@ -195,12 +215,16 @@ class RouterModuleAdapter:
         """Select relevant sections across the target documents (routing-only).
 
         For a single document this is one ``router.route`` call against its
-        authoritative TOC. For multiple documents (ADV-006) it fans out one call
-        per document and merges the selected sections fairly: every contributing
-        document is represented before any document receives a second slot, then
-        the remaining slots are filled by descending confidence with a
-        deterministic tiebreak, capped at ``max_sections``. Fallback is reported
-        when no document produced a section. The generation LLM is never invoked.
+        authoritative TOC, and the section order is the router's emitted order by
+        descending confidence (ties keep the router's emission order, unchanged
+        from the pre-fairness behavior). For multiple documents (ADV-006) it fans
+        out one call per document and merges the selected sections fairly: every
+        contributing document is represented before any document receives a second
+        slot, then the remaining slots are filled by descending confidence with an
+        emission-order tiebreak, capped at ``max_sections``. When more documents
+        contribute than ``max_sections``, not all can be represented. Fallback is
+        reported when no document produced a section. The generation LLM is never
+        invoked.
 
         Args:
             tenant_id: Owning tenant (IDOR guard).

@@ -22,7 +22,7 @@ from backend.app.adapters.ingestor import (
     _ingest_status,
     _total_pages,
 )
-from backend.app.adapters.router import RouterModuleAdapter
+from backend.app.adapters.router import RouterModuleAdapter, _merge_fairly
 from backend.app.api.interfaces import (
     DependencyUnavailable,
     IngestOutcome,
@@ -256,6 +256,95 @@ class TestRouterAdapter:
         )
 
         assert len(decision.relevant_sections) == 1
+
+    async def test_single_document_tied_confidence_preserves_emission_order(self) -> None:
+        """Single-document tied-confidence sections keep the router's emission order (FIX-9)."""
+        store = _StubStore(
+            {
+                "doc_abc123": [
+                    _section("sec_zeta", "tenant_a", 1, 2),
+                    _section("sec_alpha", "tenant_a", 3, 4),
+                    _section("sec_mid", "tenant_a", 5, 6),
+                ]
+            }
+        )
+
+        async def fake_route(query: str, doc_id: str, toc: list[dict], **kwargs: Any) -> dict:
+            ids = [entry["section_id"] for entry in toc]
+            return {
+                "relevant_sections": ids,
+                "page_ranges": [[e["page_start"], e["page_end"]] for e in toc],
+                "confidence": [0.8, 0.8, 0.8],
+                "fallback": False,
+                "routing_time_ms": 3,
+                "rationale": "",
+            }
+
+        adapter = RouterModuleAdapter(store, fake_route)
+        decision = await adapter.route(
+            tenant_id="tenant_a",
+            document_ids=["doc_abc123"],
+            query="q",
+            confidence_threshold=0.5,
+            max_sections=3,
+        )
+
+        selected = [s.section_id for s in decision.relevant_sections]
+        assert selected == ["sec_zeta", "sec_alpha", "sec_mid"]
+
+
+class TestMergeFairly:
+    """Direct unit tests for ``_merge_fairly`` ordering and None-safety."""
+
+    pytestmark: list[pytest.MarkDecorator] = []
+
+    def _routed(
+        self, section_id: str, confidence: float, document_id: str | None
+    ) -> RoutedSection:
+        """Build a minimal RoutedSection for merge ordering tests."""
+        return RoutedSection(
+            section_id=section_id,
+            title="",
+            page_start=1,
+            page_end=2,
+            confidence=confidence,
+            document_id=document_id,
+        )
+
+    def test_none_document_id_does_not_raise_and_orders_deterministically(self) -> None:
+        """A None document_id is grouped under "" and sorted without TypeError (FIX-8)."""
+        sections = [
+            self._routed("sec_a", 0.9, None),
+            self._routed("sec_b", 0.7, None),
+            self._routed("sec_c", 0.8, "doc_x"),
+        ]
+
+        merged = _merge_fairly(sections, max_sections=3)
+
+        assert [s.section_id for s in merged] == ["sec_a", "sec_c", "sec_b"]
+
+    def test_mixed_none_and_str_document_id_is_safe(self) -> None:
+        """Mixing None and string document ids never compares None against str (FIX-8)."""
+        sections = [
+            self._routed("sec_a", 0.5, None),
+            self._routed("sec_b", 0.5, "doc_x"),
+        ]
+
+        merged = _merge_fairly(sections, max_sections=2)
+
+        assert {s.section_id for s in merged} == {"sec_a", "sec_b"}
+
+    def test_tied_confidence_single_group_preserves_emission_order(self) -> None:
+        """Within one document, tied sections keep their emission order (FIX-9)."""
+        sections = [
+            self._routed("sec_z", 0.8, "doc_x"),
+            self._routed("sec_a", 0.8, "doc_x"),
+            self._routed("sec_m", 0.8, "doc_x"),
+        ]
+
+        merged = _merge_fairly(sections, max_sections=3)
+
+        assert [s.section_id for s in merged] == ["sec_z", "sec_a", "sec_m"]
 
 
 # --- FIX-C-02: PipelineIngestor ---------------------------------------------

@@ -75,6 +75,43 @@ def test_ingest_non_pdf_returns_415(
     assert response.json()["code"] == "UNSUPPORTED_MEDIA_TYPE"
 
 
+def test_ingest_accepts_bare_pdf_content_type(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    """A bare ``application/pdf`` content type is accepted (FIX-10)."""
+    response = client.post(
+        "/v1/documents",
+        headers=auth_headers,
+        files={"file": ("a.pdf", b"%PDF-1.4 body", "application/pdf")},
+    )
+    assert response.status_code == 201
+
+
+def test_ingest_accepts_parameterized_pdf_content_type(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    """A parameterized ``application/pdf; charset=utf-8`` type is accepted (FIX-10)."""
+    response = client.post(
+        "/v1/documents",
+        headers=auth_headers,
+        files={"file": ("a.pdf", b"%PDF-1.4 body", "application/pdf; charset=utf-8")},
+    )
+    assert response.status_code == 201
+
+
+def test_ingest_missing_content_type_returns_415(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    """A missing/empty content type is rejected with 415 (FIX-10)."""
+    response = client.post(
+        "/v1/documents",
+        headers=auth_headers,
+        files={"file": ("a.pdf", b"%PDF-1.4 body", "")},
+    )
+    assert response.status_code == 415
+    assert response.json()["code"] == "UNSUPPORTED_MEDIA_TYPE"
+
+
 def test_ingest_invalid_residency_returns_422(
     client: TestClient, auth_headers: dict[str, str]
 ) -> None:
