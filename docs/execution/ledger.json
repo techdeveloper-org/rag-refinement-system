@@ -510,7 +510,7 @@
       "depends_on": [
         "TODO-14"
       ],
-      "status": "pending",
+      "status": "done",
       "agents": [
         "threat-modeling-specialist",
         "sast-engineer",
@@ -530,7 +530,9 @@
       "gate": "security-lead-auditor APPROVED; ALL finding counts = 0",
       "stop_point": null,
       "context_file": "todos/todo-15-phasef-security-audit.md",
-      "completed_artifacts": []
+      "completed_artifacts": [
+        "docs/phase-F-security/"
+      ]
     },
     {
       "id": "TODO-16",

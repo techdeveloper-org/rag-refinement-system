@@ -62,10 +62,12 @@ jobs:
       - name: Install security tooling
         run: pip install ".[dev]"
       - name: Bandit SAST (blocking)
-        run: bandit -r backend ingestion -ll
+        run: bandit -r backend ingestion router db -ll
+      - name: pip-audit SCA (blocking)
+        run: pip-audit
       - name: detect-secrets scan (blocking)
         run: |
-          detect-secrets scan backend ingestion tests \
+          detect-secrets scan backend ingestion router db tests \
             --exclude-files '\.env\.example$' > .secrets.scan.json
           python - <<'PY'
           import json
@@ -85,3 +87,18 @@ jobs:
               sys.exit(1)
           print("detect-secrets: no secrets detected.")
           PY
+
+  frontend-security:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install frontend dependencies
+        run: npm ci
+      - name: npm audit (production deps, blocking)
+        run: npm audit --omit=dev --audit-level=low

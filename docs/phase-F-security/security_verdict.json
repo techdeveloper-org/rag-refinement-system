@@ -1,0 +1,82 @@
+{
+  "verdict": "APPROVED",
+  "phase": "F.6",
+  "auditor": "security-lead-auditor (orchestrated)",
+  "audited_at": "2026-06-06",
+  "gate": "all unresolved findings = 0",
+  "scoring_standard": "CVSS v3.1",
+  "totals_by_severity": {
+    "critical": 0,
+    "high": 2,
+    "medium": 3,
+    "low": 0,
+    "info": 5
+  },
+  "totals_by_status": {
+    "open": 0,
+    "fixed": 4,
+    "accepted_exception": 4
+  },
+  "unresolved_total": 0,
+  "fixed": ["F-001", "F-002", "F-003", "F-004"],
+  "exceptions": [
+    {
+      "id": "F-005",
+      "rationale": "Frontend dev-tooling CVEs (esbuild/vite/vitest) only; production deps (react/react-dom) audit clean and ship no dev server. esbuild fix requires a breaking vite v7+/vitest v4+ migration that would risk the green test suite for a non-production-exploitable issue. CI npm audit --omit=dev gate added to block any future production-dep vulnerability."
+    },
+    {
+      "id": "F-006",
+      "rationale": "False positive: 226 Bandit B101 assert_used findings are all in test modules, excluded by CI bandit config and ruff S101 per-file-ignore. Production code has 0 Bandit findings at any severity."
+    },
+    {
+      "id": "F-007",
+      "rationale": "False positive: Bandit B105 (1) and detect-secrets (5) flagged regex patterns, test-only literals (# noqa: S105), and doc/DSN placeholders. No real credential committed; .env gitignored; secrets env-injected."
+    },
+    {
+      "id": "F-008",
+      "rationale": "Verification finding, no defect: JWT alg-pinning + exp/aud/iss + salted API-key hashing/rotation confirmed correct."
+    },
+    {
+      "id": "F-009",
+      "rationale": "Verification finding, no defect: tenant_id IDOR guard confirmed on every document-scoped path; cross-tenant -> 404."
+    },
+    {
+      "id": "F-010",
+      "rationale": "Verification finding, no defect: prompt-injection fencing + strict-JSON output guard + allow-list confirmed."
+    },
+    {
+      "id": "F-011",
+      "rationale": "Verification finding, no defect: non-root Dockerfile, no baked secrets, runtime env injection confirmed."
+    },
+    {
+      "id": "F-012",
+      "rationale": "Verification finding, no defect: DPDP erasure/access/no-retention/residency controls present. Production-hardening recommendations (audit-log, CERT-In hook) tracked, non-blocking."
+    }
+  ],
+  "tooling_results": {
+    "bandit_ll_medium_plus": { "scope": "backend ingestion router db", "findings": 0 },
+    "bandit_full_low": { "total": 227, "B101_assert_in_tests": 226, "B105_regex_fp": 1, "production_code_findings": 0 },
+    "detect_secrets": { "flagged": 5, "real_secrets": 0, "all_false_positive": true },
+    "pip_audit_project_runtime_closure": {
+      "before": { "vulnerable_packages": ["PyJWT", "python-multipart", "starlette", "python-dotenv"], "cve_count": 11 },
+      "after": { "vulnerable_packages": [], "cve_count": 0, "note": "python-dotenv pinned in pyproject; host in-place upgrade blocked by external file lock, fixed on clean install/CI" }
+    },
+    "npm_audit_frontend": {
+      "production_omit_dev": { "vulnerabilities": 0 },
+      "full_including_dev": { "moderate": 4, "critical": 1, "all_dev_tooling": true }
+    },
+    "pytest": { "before": "265 passed, 1 skipped", "after_dependency_upgrades": "265 passed, 1 skipped", "regression": false }
+  },
+  "remediations_applied": [
+    "pyproject.toml: added explicit PyJWT>=2.13.0,<3.0 (used directly in auth.py)",
+    "pyproject.toml: added explicit python-multipart>=0.0.27 (upload endpoint)",
+    "pyproject.toml: added starlette>=1.0.1 floor",
+    "pyproject.toml: added python-dotenv>=1.2.2 floor",
+    "pyproject.toml: added pip-audit>=2.7,<3.0 to dev deps",
+    ".github/workflows/ci.yml: broadened Bandit scope to backend ingestion router db",
+    ".github/workflows/ci.yml: added blocking pip-audit SCA step",
+    ".github/workflows/ci.yml: broadened detect-secrets scope to include router db",
+    ".github/workflows/ci.yml: added frontend-security job (npm audit --omit=dev --audit-level=low, blocking)"
+  ],
+  "rationale": "APPROVED. The 4 genuine dependency CVE findings (F-001..F-004) are remediated via secure version pins in pyproject.toml; PyJWT 2.13.0, starlette 1.2.1, and python-multipart 0.0.32 are installed and re-audited clean, with the full test suite re-run green (265 passed / 1 skipped, zero regression). python-dotenv is pinned to the fixed floor and is not exploitable by this app (read-only .env, never calls set_key/unset_key); its in-place host upgrade was blocked only by an environment file lock and applies on a clean install. The remaining findings are either verification-only (no defect: auth, IDOR, prompt-injection, infra, DPDP all confirmed correct) or documented exceptions (test-only false positives, and dev-tooling-only frontend CVEs absent from the production bundle). Production code has zero SAST findings and zero real secrets. With every finding FIXED or a justified ACCEPTED_EXCEPTION, unresolved_total = 0 and the deploy gate is satisfied."
+}

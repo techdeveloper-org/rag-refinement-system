@@ -13,6 +13,19 @@ dependencies = [
     "pydantic>=2.6,<3.0",
     "pydantic-settings>=2.2,<3.0",
     "httpx>=0.27,<1.0",
+    # Directly imported in backend.app.security.auth; pinned to >=2.13.0 to
+    # remediate the PyJWK algorithm-confusion / JWKS-SSRF / detached-JWS DoS
+    # advisories (PYSEC-2026-120/175/176/177/178/179).
+    "PyJWT>=2.13.0,<3.0",
+    # Required by FastAPI for the multipart upload endpoint (ingestDocument);
+    # >=0.0.27 fixes the multipart-parsing DoS (CVE-2026-40347, CVE-2026-42561).
+    "python-multipart>=0.0.27",
+    # Transitive via FastAPI; floor at >=1.0.1 for the Host-header URL
+    # reconstruction fix (PYSEC-2026-161).
+    "starlette>=1.0.1",
+    # Transitive via pydantic-settings; floor at >=1.2.2 for the set_key/
+    # unset_key symlink file-overwrite fix (CVE-2026-28684).
+    "python-dotenv>=1.2.2",
 ]
 
 [project.optional-dependencies]
@@ -24,6 +37,7 @@ dev = [
     "anyio>=4.3,<5.0",
     "bandit>=1.7,<2.0",
     "detect-secrets>=1.5,<2.0",
+    "pip-audit>=2.7,<3.0",
 ]
 
 [build-system]
