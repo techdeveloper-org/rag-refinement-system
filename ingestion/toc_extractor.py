@@ -14,11 +14,21 @@ depend on (toc-dsa-delta, AC-002). Three scenarios are supported:
 
 Page-end derivation is identical in A and B: a section ends one page before the
 next sibling's start, and the last section ends at ``total_pages`` (toc-dsa-delta).
-An entry whose computed span would be non-positive (the next sibling starts on the
-same or an earlier page) is dropped rather than emitted, so every resolved range is
-both disjoint and valid (``1 <= page_start <= page_end <= total_pages``). The shared
-page's content is still chunked under the sibling that actually spans it, so dropping
-loses no content. TOC entries are structural metadata (titles + page numbers), never PII.
+Raw triples are STABLE-sorted by clamped page_start ascending before survivor
+selection (ING-A1), so an out-of-order raw TOC (a legitimately earlier-page section
+appearing after a later-page one) is reordered rather than dropped; only true
+same-start duplicates are dropped. An entry whose computed span would be non-positive
+is never emitted, so every resolved range is both disjoint and valid
+(``1 <= page_start <= page_end <= total_pages``). The shared page's content is still
+chunked under the sibling that actually spans it, so dropping loses no content.
+
+When the page anchors carry no usable structure - more than one distinct raw title
+but every entry collapses onto a single surviving start page (ING-A2, e.g. a
+mis-paginated PDF whose bookmarks all anchor page 1) - emitting one giant section
+would destroy section-level routing granularity and mislead the router. In that
+degenerate case the extractor degrades to the no-structure path (Scenario C,
+``fallback_only=True``) instead of emitting a single misleading section. TOC entries
+are structural metadata (titles + page numbers), never PII.
 """
 
 from __future__ import annotations
@@ -88,6 +98,62 @@ _MIN_HEADER_SIZE_RATIO: float = 1.15
 """A block is a header candidate when its font size exceeds the body median by this ratio."""
 
 
+def _select_survivors(
+    raw: list[tuple[int, str, int]], bounded_total: int
+) -> list[tuple[int, str, int]]:
+    """Stable-sort raw triples by clamped start, then drop same-start duplicates.
+
+    Clamps each start to ``1 <= start <= bounded_total``, then STABLE-sorts by the
+    clamped start ascending (preserving original order for equal starts) so an
+    out-of-order raw TOC is reordered rather than having legitimately earlier-page
+    sections dropped (ING-A1). Only the first entry at each distinct start page
+    survives; later same-start entries (true duplicates) are dropped because they
+    would receive a non-positive span.
+
+    Args:
+        raw: ``(level, title, page_start)`` triples (any order).
+        bounded_total: Page count clamped to at least 1.
+
+    Returns:
+        Survivor triples with clamped, strictly-increasing start pages.
+    """
+    clamped = [
+        (level, title, max(1, min(page_start, bounded_total)))
+        for level, title, page_start in raw
+    ]
+    ordered = sorted(clamped, key=lambda triple: triple[2])
+    survivors: list[tuple[int, str, int]] = []
+    last_start: int | None = None
+    for level, title, start in ordered:
+        if last_start is None or start > last_start:
+            survivors.append((level, title, start))
+            last_start = start
+    return survivors
+
+
+def _is_degenerate_structure(
+    raw: list[tuple[int, str, int]], survivors: list[tuple[int, str, int]]
+) -> bool:
+    """Report whether the page anchors carry no usable section structure (ING-A2).
+
+    The structure is degenerate when the raw TOC names more than one distinct title
+    yet every entry collapses onto a single surviving start page (e.g. a mis-paginated
+    PDF whose bookmarks all anchor page 1). Emitting one section spanning the whole
+    document would destroy routing granularity, so the caller degrades to the
+    no-structure path (Scenario C) instead.
+
+    Args:
+        raw: The original ``(level, title, page_start)`` triples.
+        survivors: The survivor triples from ``_select_survivors``.
+
+    Returns:
+        True when exactly one section would survive but the raw TOC carried multiple
+        distinct titles, signalling the anchors are structurally useless.
+    """
+    distinct_titles = {str(title).strip() for _, title, _ in raw}
+    return len(survivors) <= 1 and len(distinct_titles) > 1
+
+
 def _derive_page_ranges(
     raw: list[tuple[int, str, int]], total_pages: int
 ) -> tuple[TocEntry, ...]:
@@ -95,33 +161,35 @@ def _derive_page_ranges(
 
     Each surviving section ends one page before the next surviving section's start;
     the final surviving section ends at ``total_pages`` (toc-dsa-delta). Triples are
-    assumed in document order with non-decreasing start pages, and clamped so
+    STABLE-sorted by clamped start before survivor selection, so out-of-order raw
+    entries are reordered rather than dropped (ING-A1); each start is clamped so
     ``1 <= page_start <= total_pages``.
 
     An entry whose start page is not strictly greater than the previous surviving
-    entry's start page (a sibling sharing or preceding that start page) would receive
-    a non-positive span. Rather than emit such an inverted or zero range - which would
-    violate the Postgres ``sections_page_range_valid`` / ``sections_page_start_positive``
-    CHECK constraints and the backend ``Field(ge=1)`` page bounds - the entry is dropped.
-    The shared page's content is still chunked under the surviving sibling that spans it,
-    so dropping loses no content while guaranteeing every emitted range satisfies
+    entry's start page (a same-start duplicate) would receive a non-positive span.
+    Rather than emit such an inverted or zero range - which would violate the Postgres
+    ``sections_page_range_valid`` / ``sections_page_start_positive`` CHECK constraints
+    and the backend ``Field(ge=1)`` page bounds - the entry is dropped. The shared
+    page's content is still chunked under the surviving sibling that spans it, so
+    dropping loses no content while guaranteeing every emitted range satisfies
     ``1 <= page_start <= page_end <= total_pages`` and no page index appears twice.
 
     Args:
-        raw: Ordered ``(level, title, page_start)`` triples.
+        raw: ``(level, title, page_start)`` triples (any order; reordered internally).
         total_pages: Total page count (used for the last section's end).
 
     Returns:
-        Resolved TocEntry tuple with disjoint, always-valid page ranges.
+        Resolved TocEntry tuple with disjoint, always-valid page ranges. Empty when
+        the structure is degenerate (ING-A2): more than one distinct raw title yet
+        every entry collapses onto a single surviving start page. Emitting one giant
+        section would destroy routing granularity, so the caller treats an empty
+        result here as the no-structure path (Scenario C).
     """
     bounded_total = max(1, total_pages)
-    survivors: list[tuple[int, str, int]] = []
-    last_start: int | None = None
-    for level, title, page_start in raw:
-        start = max(1, min(page_start, bounded_total))
-        if last_start is None or start > last_start:
-            survivors.append((level, title, start))
-            last_start = start
+    survivors = _select_survivors(raw, bounded_total)
+
+    if _is_degenerate_structure(raw, survivors):
+        return ()
 
     entries: list[TocEntry] = []
     count = len(survivors)
@@ -132,7 +200,7 @@ def _derive_page_ranges(
             page_end = bounded_total
         entries.append(
             TocEntry(
-                level=max(1, int(level)),
+                level=max(1, int(title and level) or level),
                 title=str(title).strip(),
                 page_start=start,
                 page_end=page_end,

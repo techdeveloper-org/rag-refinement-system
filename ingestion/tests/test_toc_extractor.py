@@ -7,7 +7,6 @@ are contiguous, non-overlapping, and end at total_pages.
 
 from __future__ import annotations
 
-from ingestion.chunker import chunk_document
 from ingestion.parser import Page, ParsedDocument
 from ingestion.toc_extractor import TocEntry, _derive_page_ranges, extract_toc
 
@@ -79,76 +78,88 @@ def test_scenario_c_returns_fallback_only(scenario_c_doc: ParsedDocument) -> Non
     assert result.entries == ()
 
 
-def test_same_start_page_siblings_yield_valid_disjoint_ranges() -> None:
-    """Two entries sharing a start page yield only valid, strictly disjoint ranges.
+def test_distinct_titles_sharing_one_start_page_degrade_to_fallback() -> None:
+    """Distinct titles that all collapse onto one start page degrade to fallback (ING-A2).
 
-    FIX-1 regression: ``page_end = next_start - 1`` previously emitted an inverted
-    range (``page_end < page_start``) for the earlier same-start sibling, violating
-    the Postgres ``sections_page_range_valid`` CHECK and the backend ``Field(ge=1)``
-    page bounds. The shared-start sibling is now dropped, so every emitted range is
-    valid (``page_start <= page_end`` and ``page_start >= 1``) and disjoint -- no page
-    index appears in two sections, and no inverted/zero range is produced.
+    Two distinct titles both anchored at page 2 carry no usable structure: only one
+    section would survive, so emitting it as one giant range spanning the whole
+    document would destroy section-level routing granularity and mislead the router.
+    Per ING-A2 the page-range derivation reports the degenerate structure by returning
+    no entries, so the extractor falls back to whole-document search rather than
+    emitting a single misleading section. No inverted/zero range is ever produced.
     """
     raw = [(1, "A", 2), (1, "B", 2)]
     entries = _derive_page_ranges(raw, total_pages=3)
 
-    assert len(entries) == 1, "the shared-start sibling must be dropped, not emitted"
-    for entry in entries:
-        assert entry.page_start >= 1
-        assert entry.page_start <= entry.page_end
-        assert entry.page_end <= 3
-
-    claimed: set[int] = set()
-    for entry in entries:
-        pages = set(range(entry.page_start, entry.page_end + 1))
-        assert claimed.isdisjoint(pages), "ranges overlap across sections"
-        claimed |= pages
-
-    assert entries[-1].page_end == 3, "last surviving entry must end at total_pages"
+    assert entries == (), "degenerate same-start structure must yield no sections"
 
 
-def test_cover_and_chapter_both_on_page_one_no_zero_page_end() -> None:
-    """Cover + chapter both starting on page 1 never yield ``page_end = 0``.
+def test_cover_and_chapter_both_on_page_one_degrade_to_fallback() -> None:
+    """Cover + chapter both on page 1 degrade to fallback, never a zero page_end (ING-A2).
 
-    FIX-1 regression: when two consecutive entries both start on page 1, the earlier
-    one previously received ``page_end = 1 - 1 = 0``, violating both page CHECK
-    constraints. The earlier same-start entry is dropped, so no zero/invalid range
-    is emitted and the surviving entry still ends at total_pages.
+    Two distinct titles both anchored at page 1 are structurally useless: rather than
+    drop one and emit the survivor as a single whole-document section (which would
+    mislead the router), the derivation reports the degenerate structure by returning
+    no entries so the caller takes the no-structure path. No entry with
+    ``page_end == 0`` or any other invalid range is ever emitted.
     """
     raw = [(1, "Cover", 1), (1, "Chapter 1", 1)]
     entries = _derive_page_ranges(raw, total_pages=5)
 
-    assert len(entries) == 1
-    for entry in entries:
-        assert entry.page_end >= 1, "no entry may have page_end == 0"
-        assert entry.page_start >= 1
-        assert entry.page_start <= entry.page_end
-    assert entries[-1].page_end == 5
+    assert entries == (), "degenerate single-page structure must yield no sections"
 
 
-def test_same_start_page_siblings_produce_no_duplicate_chunks() -> None:
-    """Same-start-page siblings do not chunk the shared page into two sections.
+def test_all_entries_anchored_page_one_yield_fallback_only() -> None:
+    """A native TOC whose entries all anchor page 1 yields fallback_only (ING-A2).
 
-    FIX-1 end-to-end: with the shared-start sibling dropped, no section carries an
-    invalid range and page 2's content is chunked under exactly one section, so there
-    is no duplicate chunk text across sections and nothing invalid would be persisted.
+    A mis-paginated PDF whose bookmarks all point at page 1 carries multiple distinct
+    titles but no usable page structure. The extractor must degrade to the
+    no-structure path (Scenario C, ``fallback_only=True``) so the router falls back to
+    full-document search, rather than emitting one giant section spanning the whole
+    document and destroying routing granularity.
     """
     pages = tuple(
         Page(number=n, text=" ".join(f"w{n}_{i}" for i in range(120)), blocks=())
         for n in range(1, 4)
     )
-    doc = ParsedDocument(page_count=3, pages=pages, native_toc=(), content_hash="")
-    entries = _derive_page_ranges([(1, "A", 2), (1, "B", 2)], total_pages=3)
-    sections = [(f"sec_{i}", entry) for i, entry in enumerate(entries)]
+    native_toc = ((1, "Cover", 1), (1, "Chapter 1", 1), (1, "Chapter 2", 1))
+    doc = ParsedDocument(
+        page_count=3, pages=pages, native_toc=native_toc, content_hash=""
+    )
 
+    result = extract_toc(doc)
+
+    assert result.fallback_only is True
+    assert result.scenario == "C"
+    assert result.entries == ()
+
+
+def test_out_of_order_raw_toc_keeps_content_and_leaves_no_gap() -> None:
+    """An out-of-order raw TOC keeps every distinct-start section with no coverage gap.
+
+    ING-A1: a legitimately earlier-page section appearing after a later-page one
+    (``[(1, "A", 5), (1, "B", 2)]``) must be reordered by the stable-sort survivor
+    filter, not dropped. All distinct-start sections survive with valid, strictly
+    disjoint ranges; coverage is contiguous from page 1 to ``total_pages`` so no page
+    is left uncovered. This is a genuinely multi-section document (distinct start
+    pages), so it does NOT degrade to fallback.
+    """
+    raw = [(1, "A", 5), (1, "B", 2)]
+    entries = _derive_page_ranges(raw, total_pages=8)
+
+    titles = {entry.title for entry in entries}
+    assert titles == {"A", "B"}, "no distinct-start section may be dropped"
+
+    starts = [entry.page_start for entry in entries]
+    assert starts == sorted(starts), "sections must be reordered by start page"
+
+    covered: list[int] = []
     for entry in entries:
-        assert entry.page_start <= entry.page_end
         assert entry.page_start >= 1
+        assert entry.page_start <= entry.page_end
+        assert entry.page_end <= 8
+        covered.extend(range(entry.page_start, entry.page_end + 1))
 
-    chunks = chunk_document(doc, sections, doc_id="doc_x", tenant_id="t1")
-
-    texts_by_section: dict[str, list[str]] = {}
-    for chunk in chunks:
-        texts_by_section.setdefault(chunk.section_id, []).append(chunk.text)
-    all_texts = [t for texts in texts_by_section.values() for t in texts]
-    assert len(all_texts) == len(set(all_texts)), "duplicate chunk text across sections"
+    assert covered == sorted(set(covered)), "ranges overlap across sections"
+    assert covered == list(range(2, 9)), "coverage must be contiguous with no gap"
+    assert entries[-1].page_end == 8, "last section must end at total_pages"

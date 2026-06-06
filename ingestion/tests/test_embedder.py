@@ -3,7 +3,10 @@
 Asserts the fake embedder satisfies the Embedder Protocol with the collection's
 1536 dimension, that the OpenAI adapter refuses to run without an env key (no
 hardcoded key), and that the FallbackEmbedder switches to the secondary adapter
-when the primary raises.
+only on a CURATED primary-unavailability error (ING-A4) while programming bugs and
+dimension mismatches propagate. Dimension validation is the pipeline boundary's
+sole responsibility (ING-A6), so the dimension-guard tests exercise the boundary
+guard ``_validate_embed_dimension`` rather than the FallbackEmbedder.
 """
 
 from __future__ import annotations
@@ -19,6 +22,7 @@ from ingestion.embedder import (
     FallbackEmbedder,
     OpenAIEmbedder,
 )
+from ingestion.pipeline import _validate_embed_dimension
 from ingestion.tests.conftest import FakeEmbedder
 
 
@@ -35,16 +39,17 @@ class _FailingPrimary:
         raise RuntimeError("primary unavailable")
 
 
-class _NonRuntimeErrorPrimary:
-    """Primary embedder that raises a non-RuntimeError (e.g. a library/connection error).
+class _RaisingPrimary:
+    """Primary embedder that raises a configured exception (parametrizes the catch test).
 
-    Models exceptions like ``openai.APIConnectionError`` or ``ValueError`` that are not
-    ``RuntimeError`` and previously skipped the fallback path.
+    Models both a curated primary-unavailability error (e.g. ``ConnectionError``) that
+    should trigger the fallback and a programming bug (e.g. ``TypeError``) that should
+    propagate unmasked (ING-A4).
     """
 
-    def __init__(self, exc: Exception | None = None) -> None:
-        """Store the exception to raise (defaults to a plain ValueError)."""
-        self._exc = exc or ValueError("transient library error")
+    def __init__(self, exc: Exception) -> None:
+        """Store the exception this primary raises on every embed call."""
+        self._exc = exc
 
     @property
     def dimension(self) -> int:
@@ -52,12 +57,12 @@ class _NonRuntimeErrorPrimary:
         return EMBEDDING_DIM
 
     def embed(self, texts: list[str]) -> list[list[float]]:
-        """Raise the configured non-RuntimeError to exercise the broadened fallback."""
+        """Raise the configured exception to exercise the curated-catch boundary."""
         raise self._exc
 
 
 class _DimErrorPrimary:
-    """Primary embedder that returns wrong-dim vectors, tripping the dimension guard."""
+    """Primary embedder that returns wrong-dim vectors, tripping the boundary guard."""
 
     @property
     def dimension(self) -> int:
@@ -65,7 +70,7 @@ class _DimErrorPrimary:
         return EMBEDDING_DIM
 
     def embed(self, texts: list[str]) -> list[list[float]]:
-        """Return wrong-length vectors so _validate_dimension raises."""
+        """Return wrong-length vectors so the boundary guard rejects them."""
         return [[0.0] * (EMBEDDING_DIM + 1) for _ in texts]
 
 
@@ -124,39 +129,40 @@ def test_fallback_with_correct_dim_passes() -> None:
     assert all(len(vector) == EMBEDDING_DIM for vector in vectors)
 
 
-def test_fallback_with_wrong_dim_raises() -> None:
-    """A fallback returning a non-EMBEDDING_DIM vector raises EmbedderDimensionError.
+def test_boundary_guard_raises_on_wrong_dim_fallback_vectors() -> None:
+    """Wrong-dim fallback vectors are rejected by the pipeline boundary guard (ING-A6).
 
-    FIX-2: BGE-M3 is natively 1024-dim; silently upserting its vectors into the
-    1536-dim Qdrant collection corrupts it. The mismatch is now a typed error.
+    FIX-2 / ING-A6: BGE-M3 is natively 1024-dim; silently upserting its vectors into
+    the 1536-dim Qdrant collection corrupts it. The FallbackEmbedder no longer
+    validates internally; the single authoritative guard is the pipeline boundary,
+    which rejects the 1024-dim vectors with a typed error.
     """
     fallback = FallbackEmbedder(
         primary=_FailingPrimary(), fallback=_WrongDimEmbedder(dim=1024)
     )
 
     with pytest.raises(EmbedderDimensionError, match="1024-dim"):
-        fallback.embed(["only"])
+        _validate_embed_dimension(fallback.embed(["only"]))
 
 
-def test_primary_with_wrong_dim_raises() -> None:
-    """A primary returning a non-EMBEDDING_DIM vector also raises (both paths guarded)."""
+def test_boundary_guard_raises_on_wrong_dim_primary_vectors() -> None:
+    """Wrong-dim primary vectors are also rejected by the boundary guard (ING-A6)."""
     fallback = FallbackEmbedder(
         primary=_WrongDimEmbedder(dim=512), fallback=FakeEmbedder()
     )
 
     with pytest.raises(EmbedderDimensionError, match="512-dim"):
-        fallback.embed(["only"])
+        _validate_embed_dimension(fallback.embed(["only"]))
 
 
-def test_fallback_on_non_runtime_error_from_primary() -> None:
-    """A non-RuntimeError from the primary still degrades to the secondary.
+def test_transient_connection_error_from_primary_falls_back() -> None:
+    """A transient ConnectionError from the primary degrades to the BGE-M3 fallback.
 
-    FIX-7: FallbackEmbedder previously caught only RuntimeError, so a library or
-    connection error (e.g. openai.APIConnectionError, ValueError) propagated and
-    skipped the BGE-M3 fallback. Catching Exception now degrades gracefully.
+    ING-A4: ConnectionError is a curated primary-UNAVAILABILITY signal, so the
+    FallbackEmbedder swaps to the secondary embedder rather than propagating.
     """
     fallback = FallbackEmbedder(
-        primary=_NonRuntimeErrorPrimary(ValueError("library blew up")),
+        primary=_RaisingPrimary(ConnectionError("provider unreachable")),
         fallback=FakeEmbedder(),
     )
 
@@ -166,16 +172,39 @@ def test_fallback_on_non_runtime_error_from_primary() -> None:
     assert len(vectors[0]) == EMBEDDING_DIM
 
 
-def test_primary_dimension_error_not_swallowed_into_silent_fallback() -> None:
-    """A primary dimension mismatch propagates rather than masking a misconfiguration.
+def test_type_error_from_primary_propagates_not_silently_fell_back() -> None:
+    """A TypeError (programming bug) from the primary propagates, never masked (ING-A4).
 
-    FIX-7: broadening the catch to Exception must NOT hide a real dimension
-    misconfiguration behind a silent fallback; EmbedderDimensionError is re-raised.
+    ING-A4: broadening the catch to ``Exception`` masked genuine defects as a silent
+    permanent BGE-M3 fallback. The curated catch excludes ``TypeError`` so a bug
+    surfaces loudly instead of degrading the whole pipeline to the fallback model.
     """
-    fallback = FallbackEmbedder(primary=_DimErrorPrimary(), fallback=FakeEmbedder())
+    fallback = FallbackEmbedder(
+        primary=_RaisingPrimary(TypeError("embed() got an unexpected keyword")),
+        fallback=FakeEmbedder(),
+    )
 
-    with pytest.raises(EmbedderDimensionError):
+    with pytest.raises(TypeError):
         fallback.embed(["only"])
+
+
+def test_primary_dimension_error_propagates_without_silent_fallback() -> None:
+    """A primary dimension mismatch is not swallowed into a silent fallback (ING-A4/A6).
+
+    The FallbackEmbedder no longer validates dimensions (ING-A6), so wrong-dim primary
+    vectors pass straight through WITHOUT triggering a fallback - the dimension issue
+    is not treated as a transient unavailability. The authoritative boundary guard
+    then rejects them with a typed error (ING-A4: never masked).
+    """
+    fake_fallback = FakeEmbedder()
+    fallback = FallbackEmbedder(primary=_DimErrorPrimary(), fallback=fake_fallback)
+
+    vectors = fallback.embed(["only"])
+
+    assert fake_fallback.embed_calls == 0, "a dimension issue must not trigger fallback"
+    assert all(len(vector) != EMBEDDING_DIM for vector in vectors)
+    with pytest.raises(EmbedderDimensionError):
+        _validate_embed_dimension(vectors)
 
 
 def test_fallback_activation_is_logged_at_warning(

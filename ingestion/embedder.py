@@ -39,26 +39,39 @@ class EmbedderDimensionError(ValueError):
     """
 
 
-def _validate_dimension(vectors: list[list[float]], *, source: str) -> list[list[float]]:
-    """Validate that every vector has exactly ``EMBEDDING_DIM`` components.
+def _primary_unavailability_errors() -> tuple[type[BaseException], ...]:
+    """Return the curated exception types that mean the primary embedder is unavailable.
 
-    Args:
-        vectors: Vectors returned by an embedder.
-        source: Human-readable label of the producing embedder (for the error).
+    Only errors that represent primary UNAVAILABILITY or transience trigger the BGE-M3
+    fallback (ING-A4): ``RuntimeError`` (missing key / missing client library),
+    ``ConnectionError`` and ``TimeoutError`` (network), ``OSError`` (socket / file), and
+    the OpenAI SDK ``APIError`` base when it is importable. Programming bugs
+    (``TypeError``, ``AttributeError``, ``KeyError``, ``ValueError``) are deliberately
+    excluded so they propagate instead of being masked as a silent permanent fallback.
+    ``EmbedderDimensionError`` is a ``ValueError`` subclass and is likewise excluded, so
+    a dimension misconfiguration is never swallowed into a silent fallback.
 
     Returns:
-        The same vectors unchanged when every length equals ``EMBEDDING_DIM``.
-
-    Raises:
-        EmbedderDimensionError: If any vector's length differs from ``EMBEDDING_DIM``.
+        A tuple of exception classes treated as primary-unavailability signals.
     """
-    for vector in vectors:
-        if len(vector) != EMBEDDING_DIM:
-            raise EmbedderDimensionError(
-                f"{source} returned a {len(vector)}-dim vector; "
-                f"expected {EMBEDDING_DIM} (Qdrant collection size)."
-            )
-    return vectors
+    transient: list[type[BaseException]] = [
+        RuntimeError,
+        ConnectionError,
+        TimeoutError,
+        OSError,
+    ]
+    try:
+        from openai import APIError
+    except ImportError:
+        return tuple(transient)
+    transient.append(APIError)
+    return tuple(transient)
+
+
+_PRIMARY_UNAVAILABILITY_ERRORS: tuple[type[BaseException], ...] = (
+    _primary_unavailability_errors()
+)
+"""Curated primary-unavailability exception types caught by ``FallbackEmbedder`` (ING-A4)."""
 
 
 @runtime_checkable
@@ -177,13 +190,17 @@ class BgeM3Embedder:
 class FallbackEmbedder:
     """Primary embedder with an automatic fallback on primary failure.
 
-    Tries the primary adapter (OpenAI) first; on any transient or library
-    ``Exception`` (missing key, provider/network error, client library error) it
-    falls back to the secondary adapter (BGE-M3), realizing the ADR-6
-    primary-plus-multilingual-fallback policy. A dimension mismatch
-    (``EmbedderDimensionError``) is a misconfiguration, not a transient failure, so
-    it propagates instead of being masked by a silent fallback - the authoritative
-    dimension guard lives at the pipeline embed -> upsert boundary.
+    Tries the primary adapter (OpenAI) first; only a CURATED set of primary
+    UNAVAILABILITY / transient errors (missing key, provider/network error, client
+    library error - see ``_primary_unavailability_errors``) degrades to the secondary
+    adapter (BGE-M3), realizing the ADR-6 primary-plus-multilingual-fallback policy.
+    Programming bugs (``TypeError``, ``AttributeError``, ``KeyError``, ``ValueError``)
+    are NOT caught (ING-A4): they propagate so a genuine defect is not masked as a
+    silent permanent fallback. A dimension mismatch (``EmbedderDimensionError``, a
+    ``ValueError`` subclass) likewise propagates. Vector dimensions are NOT validated
+    here: the single authoritative dimension guard lives at the pipeline embed ->
+    upsert boundary, which validates ANY embedder including bare adapters, so
+    validating again here would be a redundant O(n) second pass (ING-A6).
     """
 
     def __init__(self, primary: Embedder, fallback: Embedder) -> None:
@@ -202,35 +219,32 @@ class FallbackEmbedder:
         return self._primary.dimension
 
     def embed(self, texts: list[str]) -> list[list[float]]:
-        """Embed via the primary, falling back to the secondary on failure.
+        """Embed via the primary, falling back to the secondary on primary unavailability.
 
-        Any transient or library exception from the primary (missing key,
-        provider/network error, client library error) degrades to the fallback,
-        logged at WARNING so the model swap is auditable. A dimension mismatch is a
-        misconfiguration, not a transient failure: ``EmbedderDimensionError`` is
-        re-raised rather than masked by a silent fallback. The returned vector length
-        is validated on both paths as defense in depth; the authoritative dimension
-        guard is the pipeline embed -> upsert boundary, which validates ANY embedder.
+        Only a curated set of primary UNAVAILABILITY / transient errors (missing key,
+        provider/network error, client library error) degrades to the fallback, logged
+        at WARNING so the model swap is auditable. Programming bugs (``TypeError``,
+        ``AttributeError``, ``KeyError``, ``ValueError``) and dimension mismatches
+        (``EmbedderDimensionError``) are NOT caught - they propagate rather than being
+        masked as a silent permanent fallback (ING-A4). Vector dimensions are not
+        validated here; the authoritative guard is the pipeline embed -> upsert
+        boundary, so this method does not duplicate that O(n) pass (ING-A6).
 
         Args:
             texts: Chunk texts to embed.
 
         Returns:
-            One ``EMBEDDING_DIM``-length vector per input text.
+            One vector per input text from whichever embedder served the request.
 
         Raises:
-            EmbedderDimensionError: If the chosen embedder returns a vector whose
-                length is not ``EMBEDDING_DIM``; not swallowed into a silent fallback.
+            TypeError, AttributeError, KeyError, ValueError, EmbedderDimensionError:
+                Propagated from the primary - never masked by a silent fallback.
         """
         try:
-            return _validate_dimension(self._primary.embed(texts), source="primary embedder")
-        except EmbedderDimensionError:
-            raise
-        except Exception as exc:
+            return self._primary.embed(texts)
+        except _PRIMARY_UNAVAILABILITY_ERRORS as exc:
             logger.warning(
                 "Primary embedder unavailable (%s); activating fallback embedder.",
                 exc,
             )
-            return _validate_dimension(
-                self._fallback.embed(texts), source="fallback embedder"
-            )
+            return self._fallback.embed(texts)
