@@ -352,7 +352,7 @@
       "depends_on": [
         "TODO-09"
       ],
-      "status": "pending",
+      "status": "done",
       "agents": [
         "database-engineer",
         "devops-engineer"
@@ -367,7 +367,17 @@
       "gate": "unit tests pass per component",
       "stop_point": null,
       "context_file": "todos/todo-10-phaseb1-foundation-schema-and-ops.md",
-      "completed_artifacts": []
+      "completed_artifacts": [
+        "migrations/",
+        "db/",
+        "backend/",
+        "Dockerfile",
+        "docker-compose.yml",
+        ".github/workflows/ci.yml",
+        "pyproject.toml",
+        ".env.example",
+        "tests/"
+      ]
     },
     {
       "id": "TODO-11",
