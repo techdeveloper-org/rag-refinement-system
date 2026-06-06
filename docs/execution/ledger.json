@@ -317,7 +317,7 @@
       "depends_on": [
         "TODO-08"
       ],
-      "status": "in_progress",
+      "status": "done",
       "agents": [
         "business-analyst-agent",
         "product-manager-agent",
@@ -337,7 +337,12 @@
       "gate": "IMPLEMENTATION READY; RS=1.0; STOP 8",
       "stop_point": "STOP 8 user review",
       "context_file": "todos/todo-09-phase8-pre-implementation-alignment.md",
-      "completed_artifacts": []
+      "completed_artifacts": [
+        "docs/phase-8-alignment/ir5_alignment_verdict.json",
+        "docs/phase-8-alignment/ir2_resolution_log.json",
+        "docs/phase-8-alignment/implementation_execution_plan_v2.json",
+        "docs/phase-8-alignment/ar3_context_windows_v2.json"
+      ]
     },
     {
       "id": "TODO-10",
