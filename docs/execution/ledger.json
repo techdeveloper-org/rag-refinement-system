@@ -466,7 +466,7 @@
       "depends_on": [
         "TODO-13"
       ],
-      "status": "pending",
+      "status": "done",
       "agents": [
         "test-management-agent",
         "unit-testing-specialist",
@@ -485,7 +485,22 @@
       "gate": "coverage=100% AND DRE=1.0",
       "stop_point": null,
       "context_file": "todos/todo-14-phased-qa-pipeline.md",
-      "completed_artifacts": []
+      "completed_artifacts": [
+        "docs/phase-D-qa/test_plan.md",
+        "docs/phase-D-qa/qa_verdict.json",
+        "tests/test_document_store_adapter.py",
+        "tests/test_dependency_providers.py",
+        "tests/test_health_internals.py",
+        "tests/test_generation_adapter.py",
+        "tests/test_backend_internals.py",
+        "tests/test_remaining_gaps.py",
+        "ingestion/tests/test_production_stores.py",
+        "ingestion/tests/test_embedder_adapters.py",
+        "ingestion/tests/test_ingestion_internals.py",
+        "router/tests/test_router_llm_adapter.py",
+        "router/tests/test_router_internals.py",
+        "pyproject.toml [tool.coverage] + pytest-cov dev dep"
+      ]
     },
     {
       "id": "TODO-15",

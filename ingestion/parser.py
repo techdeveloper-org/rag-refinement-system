@@ -192,7 +192,7 @@ class PyMuPDFParser:
         if not text:
             return None
         dominant = max(spans, key=lambda span: len(span.get("text", "")), default=None)
-        if dominant is None:
+        if dominant is None:  # pragma: no cover - defensive: unreachable once text is non-empty
             return None
         font_name = str(dominant.get("font", ""))
         bbox = block.get("bbox", (0.0, 0.0, 0.0, 0.0))
