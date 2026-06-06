@@ -22,7 +22,8 @@ interface ToastState {
  * UploadLibrary screen (FR-001, FR-024, FR-025, FR-026, FR-027, FR-028). Hosts
  * the UploadDropzone and the paginated DocumentLibrary. Upload outcomes
  * (indexed / dedup / fallback-only / error) and erasure/export results surface
- * as Toasts driven by real API responses.
+ * as Toasts driven by real API responses. A deduplicated upload opens the
+ * existing document via onOpenDocument so the toast copy matches the behavior.
  *
  * @param client - The typed API client.
  * @param onOpenDocument - Navigate to the document/chat view for a document.
@@ -61,7 +62,11 @@ export function UploadLibraryScreen({ client, onOpenDocument }: UploadLibraryScr
         const result = await client.ingestDocument(file, fields);
         if (result.deduplicated) {
           setToast({ tone: "info", message: "Already in library - opened existing." });
-        } else if (result.ingest_status === "fallback_only") {
+          const existing = await client.getDocument(result.doc_id);
+          onOpenDocument(existing);
+          return;
+        }
+        if (result.ingest_status === "fallback_only") {
           setToast({ tone: "warning", message: "No TOC detected - full-doc mode." });
         } else if (result.ingest_status === "ephemeral") {
           setToast({ tone: "info", message: "Processed in no-retention mode (not stored)." });
@@ -76,7 +81,7 @@ export function UploadLibraryScreen({ client, onOpenDocument }: UploadLibraryScr
         setUploading(false);
       }
     },
-    [client, loadPage, page],
+    [client, loadPage, page, onOpenDocument],
   );
 
   const handleDelete = useCallback(

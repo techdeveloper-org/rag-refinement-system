@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { AnswerStreamClient } from "@/api/sse";
 import type { AnswerRequest, DocumentId } from "@/api/types";
 import type { ChatTurn } from "@/components/ChatStream";
@@ -8,6 +8,7 @@ export interface UseAnswerStreamResult {
   turns: ChatTurn[];
   pending: boolean;
   ask: (documentId: DocumentId, query: string) => void;
+  abort: () => void;
 }
 
 let turnCounter = 0;
@@ -26,8 +27,16 @@ function nextTurnId(): string {
  * text, attaches the terminal `final` event, and records a mid-stream or
  * pre-stream `error` Problem on the turn (surfaced as an alert, never dropped).
  *
+ * Only one stream is in flight at a time: a new `ask` aborts the previous
+ * stream before starting, the in-flight stream is aborted on unmount, and the
+ * exposed `abort` cancels it on a document switch. The terminal `finally`
+ * reconciles shared `pending`/abort state only when its own controller is still
+ * the current one, so a late finisher never re-enables the composer while a
+ * newer stream is live.
+ *
  * @param client - The configured AnswerStreamClient.
- * @returns The accumulated turns, a pending flag, and the `ask` action.
+ * @returns The accumulated turns, a pending flag, the `ask` action, and an
+ *   `abort` action that cancels any in-flight stream.
  */
 export function useAnswerStream(client: AnswerStreamClient): UseAnswerStreamResult {
   const [turns, setTurns] = useState<ChatTurn[]>([]);
@@ -53,6 +62,7 @@ export function useAnswerStream(client: AnswerStreamClient): UseAnswerStreamResu
       setTurns((prev) => [...prev, turn]);
       setPending(true);
 
+      abortRef.current?.abort();
       const controller = new AbortController();
       abortRef.current = controller;
 
@@ -87,12 +97,27 @@ export function useAnswerStream(client: AnswerStreamClient): UseAnswerStreamResu
         )
         .finally(() => {
           updateTurn(id, { streaming: false });
-          setPending(false);
-          abortRef.current = null;
+          if (abortRef.current === controller) {
+            setPending(false);
+            abortRef.current = null;
+          }
         });
     },
     [client, updateTurn],
   );
 
-  return { turns, pending, ask };
+  const abort = useCallback((): void => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setPending(false);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+      abortRef.current = null;
+    };
+  }, []);
+
+  return { turns, pending, ask, abort };
 }
