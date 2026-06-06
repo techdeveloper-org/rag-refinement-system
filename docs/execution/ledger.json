@@ -120,7 +120,7 @@
       "depends_on": [
         "TODO-02"
       ],
-      "status": "in_progress",
+      "status": "done",
       "agents": [
         "business-analyst-agent",
         "product-manager-agent",
@@ -134,7 +134,10 @@
       "gate": "JOINT APPROVED",
       "stop_point": "User reviews advisory items",
       "context_file": "todos/todo-03-phase2-joint-blueprint-validation.md",
-      "completed_artifacts": []
+      "completed_artifacts": [
+        "docs/phase-2-validation/advisory_items.json",
+        "docs/phase-2-validation/joint_verdict.json"
+      ]
     },
     {
       "id": "TODO-04",
@@ -144,7 +147,7 @@
       "depends_on": [
         "TODO-03"
       ],
-      "status": "pending",
+      "status": "in_progress",
       "agents": [
         "ui-ux-designer",
         "consensus-agent",
