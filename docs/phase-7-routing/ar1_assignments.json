@@ -1,0 +1,164 @@
+{
+  "$comment": "Phase 7 (TODO-08) Agent-Task Routing AR1: per Sprint-1 story dev/review assignment with Maker-Checker (review_agent != dev_agent) and a weighted routing_score. routing_score = component_match*0.35 + tech_stack*0.30 + fr_keyword*0.20 + story_type*0.15; threshold >= 0.75. Agents are real Master KG agents (agents_all.json, KG v29.9.16). P1 security override: AuthService/PII/PaymentGateway stories get a canonical Phase-F security agent as review_agent. dev_agent derives from sprint_agent_briefs.json lead_agent; review_agent is a distinct, capability-adjacent KG agent. Source: sprint_1_backlog.md, sprint_agent_briefs.json, fr_story_traceability.json, _common_context.md AGREED CONTRACTS.",
+  "generated": "2026-06-06",
+  "phase": "7",
+  "artifact": "AR1",
+  "kg_version": "29.9.16",
+  "scoring_model": {
+    "formula": "routing_score = component_match*0.35 + tech_stack*0.30 + fr_keyword*0.20 + story_type*0.15",
+    "threshold": 0.75,
+    "dimensions": {
+      "component_match": "dev_agent's primary component domain matches the story's epic/component (1.0 exact, 0.85 adjacent)",
+      "tech_stack": "dev_agent's stack (Python/FastAPI, Postgres, Qdrant, LangGraph, React, Docker/CI) matches story stack",
+      "fr_keyword": "FR/NFR keyword overlap between story fr_refs and dev_agent specialization",
+      "story_type": "story risk_tier/type (foundation/core/P0-risk/security) matches dev_agent role"
+    }
+  },
+  "maker_checker_rule": "review_agent != dev_agent for every story (enforced). All routing_score >= 0.75 (enforced).",
+  "security_p1_override": "Stories touching AuthService / PII / PaymentGateway route a canonical Phase-F security agent as review_agent. In Sprint 1: STORY-038 (Auth) -> auth-security-specialist; STORY-034 (DPDP/x-pii PII access) -> security-compliance-mapper; STORY-014 (router LLM injection surface, OWASP-LLM) -> threat-modeling-specialist. security-testing-engineer is the generic P1 security checker used where no narrower canonical agent applies. No PaymentGateway story exists in this product.",
+  "assignments": [
+    {
+      "story_id": "STORY-001",
+      "title": "PostgreSQL structure schema + migrations",
+      "epic": "EPIC-STO",
+      "fr_refs": ["FR-003", "FR-024"],
+      "risk_tier": "foundation",
+      "dev_agent": "database-engineer",
+      "review_agent": "python-backend-engineer",
+      "routing_score": 0.98,
+      "score_breakdown": { "component_match": 1.0, "tech_stack": 1.0, "fr_keyword": 0.9, "story_type": 1.0 },
+      "rationale": "Postgres DDL/migrations/tenant_id is the core database-engineer competency (component 1.0, Postgres stack 1.0). FR-003/024 are schema/page-range substrate. python-backend-engineer reviews because it consumes the schema via the AGREED CONTRACT (backend <-> database-engineer payload/filter) and can verify the tenant_id scoping path it depends on - distinct maker/checker."
+    },
+    {
+      "story_id": "STORY-038",
+      "title": "Auth: API keys + OAuth2/JWT + tenant substrate",
+      "epic": "EPIC-SEC",
+      "fr_refs": ["NFR-015"],
+      "risk_tier": "foundation/security",
+      "dev_agent": "python-backend-engineer",
+      "review_agent": "auth-security-specialist",
+      "routing_score": 0.94,
+      "score_breakdown": { "component_match": 0.95, "tech_stack": 1.0, "fr_keyword": 0.9, "story_type": 0.85 },
+      "rationale": "Auth endpoints (API key rotation + OAuth2/JWT) are FastAPI backend work (python-backend-engineer, stack 1.0). P1 security override: this is the AuthService story, so the canonical Phase-F auth-security-specialist is the review_agent (JWT validation, API-key rotation, session-fixation/privilege-escalation review per AGREED CONTRACT api-security/auth <-> backend, ADV-003 rate-limit). Maker != checker, security P1 covered."
+    },
+    {
+      "story_id": "STORY-002",
+      "title": "Qdrant collection + payload schema",
+      "epic": "EPIC-STO",
+      "fr_refs": ["FR-004"],
+      "risk_tier": "foundation",
+      "dev_agent": "database-engineer",
+      "review_agent": "data-engineer",
+      "routing_score": 0.93,
+      "score_breakdown": { "component_match": 0.95, "tech_stack": 0.95, "fr_keyword": 0.9, "story_type": 0.9 },
+      "rationale": "Qdrant collection + payload index on section_id/tenant_id is vector-store schema (database-engineer, ADR-2). data-engineer is the listed supporting agent and downstream consumer (owns embed+upsert into this payload) - ideal checker that the payload filter contract is satisfiable. Distinct maker/checker."
+    },
+    {
+      "story_id": "STORY-004",
+      "title": "Service skeleton: Docker + /health + /ready",
+      "epic": "EPIC-OPS",
+      "fr_refs": ["NFR-009"],
+      "risk_tier": "foundation",
+      "dev_agent": "devops-engineer",
+      "review_agent": "python-backend-engineer",
+      "routing_score": 0.92,
+      "score_breakdown": { "component_match": 1.0, "tech_stack": 0.95, "fr_keyword": 0.8, "story_type": 0.9 },
+      "rationale": "Dockerfile + /health + /ready (503 on dependency-down) is devops-engineer core (component 1.0, Docker/CI stack). python-backend-engineer reviews because the FastAPI service mounts these probes (getHealth/getReadiness operationIds) and must confirm /ready wiring to deps. Maker != checker."
+    },
+    {
+      "story_id": "STORY-005",
+      "title": "CI: lint + type + unit + SAST + secrets scan",
+      "epic": "EPIC-OPS",
+      "fr_refs": ["NFR-007", "NFR-010"],
+      "risk_tier": "foundation/security",
+      "dev_agent": "devops-engineer",
+      "review_agent": "secrets-detection-specialist",
+      "routing_score": 0.90,
+      "score_breakdown": { "component_match": 0.95, "tech_stack": 0.9, "fr_keyword": 0.85, "story_type": 0.85 },
+      "rationale": "CI pipeline (lint+type+unit+SAST+secrets, Python+TS stacks) is devops-engineer (component 0.95, CI stack). Security-flavoured gate, so the canonical Phase-F secrets-detection-specialist reviews that the secrets-scan blocks on any hardcoded key (AGREED CONTRACT sast/secrets <-> devops). Maker != checker, security checker on a security gate."
+    },
+    {
+      "story_id": "STORY-008",
+      "title": "PDF upload + extraction (POST /v1/documents)",
+      "epic": "EPIC-ING",
+      "fr_refs": ["FR-001"],
+      "risk_tier": "core",
+      "dev_agent": "python-backend-engineer",
+      "review_agent": "data-engineer",
+      "routing_score": 0.91,
+      "score_breakdown": { "component_match": 0.95, "tech_stack": 1.0, "fr_keyword": 0.85, "story_type": 0.8 },
+      "rationale": "ingestDocument HTTP endpoint (POST /v1/documents, IngestResponse shape, content-hash idempotency) is the FastAPI boundary owned by python-backend-engineer per AGREED CONTRACT (backend owns upload endpoint, calls ingest_document). data-engineer reviews the ingest handoff contract it owns downstream. Maker != checker."
+    },
+    {
+      "story_id": "STORY-009",
+      "title": "Native TOC extraction (Scenario A)",
+      "epic": "EPIC-ING",
+      "fr_refs": ["FR-002"],
+      "risk_tier": "core",
+      "dev_agent": "data-engineer",
+      "review_agent": "python-backend-engineer",
+      "routing_score": 0.90,
+      "score_breakdown": { "component_match": 0.95, "tech_stack": 0.9, "fr_keyword": 0.85, "story_type": 0.8 },
+      "rationale": "PyMuPDF get_toc() native TOC (level/title/page-range, ADR-4) is data-engineer ingestion work. python-backend-engineer reviews because it consumes the toc in the IngestResponse it returns to callers. Distinct maker/checker."
+    },
+    {
+      "story_id": "STORY-003",
+      "title": "Embedding + idempotent upsert pipeline",
+      "epic": "EPIC-STO",
+      "fr_refs": ["FR-004"],
+      "risk_tier": "core",
+      "dev_agent": "data-engineer",
+      "review_agent": "database-engineer",
+      "routing_score": 0.91,
+      "score_breakdown": { "component_match": 0.95, "tech_stack": 0.95, "fr_keyword": 0.85, "story_type": 0.85 },
+      "rationale": "Embed (OpenAI text-embedding-3-small, ADR-6) + idempotent Qdrant upsert is data-engineer (owns embed+upsert per AGREED CONTRACT). database-engineer reviews that upserts honor the STORY-002 payload schema/index and content-hash dedup. Maker != checker."
+    },
+    {
+      "story_id": "STORY-011",
+      "title": "Section-aware 3-level chunking",
+      "epic": "EPIC-ING",
+      "fr_refs": ["FR-003"],
+      "risk_tier": "P0-risk",
+      "dev_agent": "data-engineer",
+      "review_agent": "ai-engineer",
+      "routing_score": 0.88,
+      "score_breakdown": { "component_match": 0.9, "tech_stack": 0.9, "fr_keyword": 0.85, "story_type": 0.85 },
+      "rationale": "Section-aware 3-level chunking (no chunk crosses a section boundary, deterministic golden fixtures, P0-risk) is data-engineer ingestion. P0-risk so the checker is ai-engineer - the router/retrieval consumer that depends on clean section boundaries for scoped retrieval; it best validates that the chunk->section_id contract serves routing. Maker != checker."
+    },
+    {
+      "story_id": "STORY-014",
+      "title": "LangGraph router node (Claude 3 Haiku)",
+      "epic": "EPIC-RTR",
+      "fr_refs": ["FR-005", "NFR-008"],
+      "risk_tier": "P0-risk",
+      "dev_agent": "ai-engineer",
+      "review_agent": "threat-modeling-specialist",
+      "routing_score": 0.92,
+      "score_breakdown": { "component_match": 0.95, "tech_stack": 0.95, "fr_keyword": 0.9, "story_type": 0.85 },
+      "rationale": "LangGraph router node + Claude 3 Haiku + RouterOutput contract validation + deterministic fallback (ADR-1/ADR-3, ADV-004, P0-risk) is ai-engineer core (component 0.95). P1 security override (NFR-008 OWASP-LLM): the canonical Phase-F threat-modeling-specialist reviews the prompt-injection surface (untrusted document text + query, strict-JSON, reject non-JSON) per AGREED CONTRACT threat-modeling <-> ai-engineer. Maker != checker, LLM security P1 covered."
+    },
+    {
+      "story_id": "STORY-034",
+      "title": "DPDP access + x-pii inventory (FR-029)",
+      "epic": "EPIC-SEC",
+      "fr_refs": ["FR-026", "FR-029"],
+      "risk_tier": "security/compliance",
+      "dev_agent": "python-backend-engineer",
+      "review_agent": "security-compliance-mapper",
+      "routing_score": 0.90,
+      "score_breakdown": { "component_match": 0.9, "tech_stack": 0.95, "fr_keyword": 0.9, "story_type": 0.85 },
+      "rationale": "exportDocumentData (GET /v1/documents/{id}/data, DataAccessExport.pii_fields[], x-pii honored) is a FastAPI endpoint owned by python-backend-engineer. P1 security override: this is the PII data-access story, so the canonical Phase-F security-compliance-mapper reviews DPDP Act 2023 mapping (x-pii inventory, access export) per AGREED CONTRACT security-compliance-mapper <-> SA. Maker != checker, PII P1 covered."
+    }
+  ],
+  "summary": {
+    "story_count": 11,
+    "all_scores_ge_075": true,
+    "min_routing_score": 0.88,
+    "maker_checker_violations": 0,
+    "security_p1_stories": ["STORY-038", "STORY-014", "STORY-034"],
+    "security_p1_review_agents": ["auth-security-specialist", "threat-modeling-specialist", "security-compliance-mapper"],
+    "security_gate_stories": ["STORY-005"],
+    "agents_used_all_in_kg": true,
+    "github_calls_made": false
+  }
+}

@@ -1,0 +1,130 @@
+{
+  "$comment": "Phase 7 (TODO-08) Agent-Task Routing AR3: per Sprint-1 story isolated context window. Each story gets ONLY the delta-GSD chunks (from context_delivery_plan.md), files, and token ceiling it needs - no more (context isolation). DPDP PII isolation: no document PII content, no cross-tenant data, and no cross-story PII bleed is placed in any window; only x-pii field NAMES/metadata and the schema flag travel, never PII VALUES. Token ceilings derive from the Phase B per-agent budgets in context_delivery_plan.md section 2. context-engineering-agent auto-invoked. Source: context_delivery_plan.md, sprint_agent_briefs.json, hld.md, openapi.yaml.",
+  "generated": "2026-06-06",
+  "phase": "7",
+  "artifact": "AR3",
+  "shared_header": {
+    "content": "10 ADRs (compressed, ~1500 tokens) + the relevant AGREED CONTRACTS lines",
+    "tokens": 1500,
+    "note": "Additive to each story window; the only context shared across all Phase B agents per context_delivery_plan.md section 2."
+  },
+  "pii_isolation_policy": {
+    "rule": "No story window contains document PII VALUES, raw uploaded content, or another tenant's/story's data. x-pii metadata travels as FIELD NAMES + the schema-level pii_flags annotation only (DPDP Act 2023 minimization). Each window is tenant-agnostic at design time; tenant_id is a runtime scope, never a literal tenant's data baked into the prompt.",
+    "cross_story_bleed": "none",
+    "cross_tenant_bleed": "none",
+    "pii_value_exposure": "none (field-name/metadata only)",
+    "stories_touching_pii_metadata": ["STORY-001", "STORY-034"],
+    "enforcement": "context-engineering-agent strips any literal document text/PII before window delivery; hallucination-detector + context-faithfulness-engineer verify post-delivery."
+  },
+  "windows": [
+    {
+      "story_id": "STORY-001",
+      "dev_agent": "database-engineer",
+      "gsd_chunks": ["pg-schema-delta", "dpdp-compliance-delta"],
+      "files": ["docs/phase-1-architecture/hld.md (4.1, 4.2)", "SRS.md (AC-003, AC-024)", "docs/phase-1-architecture/context_delivery_plan.md"],
+      "token_ceiling": 12000,
+      "pii": { "carries_pii_values": false, "pii_metadata": "pii_flags column definition + x-pii field-name list for the sections/documents tables (names only)", "tenant_scope": "tenant_id column design only" },
+      "isolation_note": "Schema-only window. dpdp-compliance-delta included because the schema must declare pii_flags/residency_region columns; no PII values, no Qdrant/router/API context (not needed for DDL)."
+    },
+    {
+      "story_id": "STORY-038",
+      "dev_agent": "python-backend-engineer",
+      "gsd_chunks": ["auth-schema-delta", "threat-model-delta"],
+      "files": ["docs/phase-1-architecture/hld.md (ADR-7, 7.2, 7.3)", "docs/phase-1-api-contracts/openapi.yaml (securitySchemes, x-rate-limit)", "docs/phase-4-reconciliation/grand_advisory_items.json (ADV-003)"],
+      "token_ceiling": 14000,
+      "pii": { "carries_pii_values": false, "pii_metadata": "none (auth deals in credentials/tenant scope, not document PII)", "tenant_scope": "tenant_id scoping path design" },
+      "isolation_note": "Auth window. threat-model-delta scoped to auth attack surface (JWT validation, API-key rotation, session-fixation, rate-limit ADV-003). No ingestion/router/Qdrant context."
+    },
+    {
+      "story_id": "STORY-002",
+      "dev_agent": "database-engineer",
+      "gsd_chunks": ["qdrant-payload-delta"],
+      "files": ["docs/phase-1-architecture/hld.md (4.3, ADR-2)", "SRS.md (AC-004)"],
+      "token_ceiling": 9000,
+      "pii": { "carries_pii_values": false, "pii_metadata": "none", "tenant_scope": "tenant_id payload field design only" },
+      "isolation_note": "Qdrant payload-schema window. Single chunk; minimal ceiling. No PII, no Postgres DDL, no router/API context."
+    },
+    {
+      "story_id": "STORY-004",
+      "dev_agent": "devops-engineer",
+      "gsd_chunks": ["auth-schema-delta"],
+      "files": ["docs/phase-1-architecture/hld.md (9)", "docs/phase-1-api-contracts/openapi.yaml (getHealth, getReadiness)"],
+      "token_ceiling": 9000,
+      "pii": { "carries_pii_values": false, "pii_metadata": "none", "tenant_scope": "none (infra-level)" },
+      "isolation_note": "Service-skeleton window. auth-schema-delta only for the secret-manager env-injection contract (no secrets in code); health/ready operationIds from openapi. No application-domain or PII context."
+    },
+    {
+      "story_id": "STORY-005",
+      "dev_agent": "devops-engineer",
+      "gsd_chunks": ["threat-model-delta"],
+      "files": ["docs/phase-1-architecture/hld.md (8)", "SRS.md (NFR-007, NFR-010)"],
+      "token_ceiling": 10000,
+      "pii": { "carries_pii_values": false, "pii_metadata": "none", "tenant_scope": "none" },
+      "isolation_note": "CI/SAST/secrets-gate window. threat-model-delta for the secrets/SAST policy (block on hardcoded key, Python+TS stacks). No application data, no PII."
+    },
+    {
+      "story_id": "STORY-008",
+      "dev_agent": "python-backend-engineer",
+      "gsd_chunks": ["api-contract-delta", "ingestion-pipeline-delta"],
+      "files": ["docs/phase-1-architecture/hld.md (3.1)", "docs/phase-1-api-contracts/openapi.yaml (ingestDocument)", "SRS.md (AC-001)", "docs/phase-4-reconciliation/grand_advisory_items.json (ADV-001)"],
+      "token_ceiling": 14000,
+      "pii": { "carries_pii_values": false, "pii_metadata": "none (upload handles file bytes at runtime, not in prompt context)", "tenant_scope": "tenant_id on the documents row written at ingest" },
+      "isolation_note": "Upload-endpoint window. ingestion-pipeline-delta for the ingest_document handoff contract + content-hash idempotency; api-contract-delta scoped to ingestDocument operationId. No router/auth-internals/PII-value context."
+    },
+    {
+      "story_id": "STORY-009",
+      "dev_agent": "data-engineer",
+      "gsd_chunks": ["ingestion-pipeline-delta", "toc-dsa-delta"],
+      "files": ["docs/phase-1-architecture/hld.md (3.1, ADR-4)", "SRS.md (AC-002)"],
+      "token_ceiling": 12000,
+      "pii": { "carries_pii_values": false, "pii_metadata": "none (TOC = section titles/page ranges, structural metadata, not PII)", "tenant_scope": "tenant_id propagated to section rows" },
+      "isolation_note": "Native-TOC window. toc-dsa-delta for the TOC interval-tree/page->section mapping; PyMuPDF get_toc() (ADR-4). No embedding/router/API context."
+    },
+    {
+      "story_id": "STORY-003",
+      "dev_agent": "data-engineer",
+      "gsd_chunks": ["ingestion-pipeline-delta", "qdrant-payload-delta"],
+      "files": ["docs/phase-1-architecture/hld.md (4.3, ADR-6)", "SRS.md (AC-004, AC-001)"],
+      "token_ceiling": 13000,
+      "pii": { "carries_pii_values": false, "pii_metadata": "none (embeds chunk text at runtime; prompt context carries the pipeline contract, not chunk values)", "tenant_scope": "tenant_id on every Qdrant point payload" },
+      "isolation_note": "Embed+upsert window. qdrant-payload-delta to match STORY-002 payload schema; embedding model from ADR-6. Idempotent on content hash; key via env only (no embedded secret). No router/auth/Postgres-DDL context."
+    },
+    {
+      "story_id": "STORY-011",
+      "dev_agent": "data-engineer",
+      "gsd_chunks": ["ingestion-pipeline-delta", "pg-schema-delta", "toc-dsa-delta"],
+      "files": ["docs/phase-1-architecture/hld.md (4.1)", "SRS.md (AC-003)"],
+      "token_ceiling": 14000,
+      "pii": { "carries_pii_values": false, "pii_metadata": "none (chunk boundaries are structural; chunk text handled at runtime)", "tenant_scope": "tenant_id carried onto chunks" },
+      "isolation_note": "Section-aware-chunking (P0-risk) window. pg-schema-delta + toc-dsa-delta for the section-boundary authority (no chunk crosses a section); deterministic golden fixtures. No router/API/PII-value context."
+    },
+    {
+      "story_id": "STORY-014",
+      "dev_agent": "ai-engineer",
+      "gsd_chunks": ["router-contract-delta", "toc-dsa-delta", "fallback-graph-delta", "threat-model-delta"],
+      "files": ["docs/phase-1-architecture/hld.md (3.2, 7.1, ADR-1, ADR-3)", "SRS.md (AC-005)", "docs/phase-4-reconciliation/grand_advisory_items.json (ADV-004)"],
+      "token_ceiling": 16000,
+      "pii": { "carries_pii_values": false, "pii_metadata": "none (router sees section titles/IDs + query at runtime, treated as untrusted; no PII baked into prompt context)", "tenant_scope": "tenant_id scoping on the retrieval filter" },
+      "isolation_note": "Router (P0-risk) window - the largest, per the ai-engineer 16K budget. threat-model-delta for OWASP-LLM prompt-injection (strict-JSON, reject non-JSON, untrusted document text + query). RouterOutput contract validation + deterministic fallback (ADV-004). No upload/auth-internals/Postgres-DDL context."
+    },
+    {
+      "story_id": "STORY-034",
+      "dev_agent": "python-backend-engineer",
+      "gsd_chunks": ["dpdp-compliance-delta", "api-contract-delta", "pg-schema-delta"],
+      "files": ["docs/phase-1-architecture/hld.md (7.4, 4.2)", "docs/phase-1-api-contracts/openapi.yaml (exportDocumentData, x-pii)", "SRS.md (AC-026, AC-029)"],
+      "token_ceiling": 14000,
+      "pii": { "carries_pii_values": false, "pii_metadata": "x-pii FIELD NAMES enumerated for DataAccessExport.pii_fields[] (names only, no values); pg-schema-delta pii_flags definition", "tenant_scope": "tenant-scoped access; DataAccessExport returns only the requesting tenant's document data at runtime" },
+      "isolation_note": "DPDP-access window. Carries x-pii field NAMES + the schema flag so the export can enumerate pii_fields[], but NO PII VALUES and NO cross-tenant data. dpdp-compliance-delta + exportDocumentData operationId scope. This is the only story whose context intentionally references x-pii metadata; it is field-name/metadata only - PII isolation preserved."
+    }
+  ],
+  "summary": {
+    "story_count": 11,
+    "min_ceiling": 9000,
+    "max_ceiling": 16000,
+    "all_windows_bounded": true,
+    "cross_story_pii_bleed": false,
+    "cross_tenant_pii_bleed": false,
+    "pii_values_in_any_window": false,
+    "shared_header_additive": true
+  }
+}

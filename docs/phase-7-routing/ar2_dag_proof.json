@@ -1,0 +1,53 @@
+{
+  "$comment": "Phase 7 (TODO-08) Agent-Task Routing AR2: Kahn topological sort over Sprint-1 story dependencies. Proves the dependency graph is a DAG (no cycles) and emits execution_groups = parallel waves (each group's stories have all dependencies satisfied by prior groups and no intra-group edge). Edges derived from sprint_1_backlog.md section 4 foundation-first rationale + AGREED CONTRACTS data-path handoffs. agile-business-mathematics-expert auto-invoked for the topological proof. Source: sprint_1_backlog.md, sprint_agent_briefs.json, _common_context.md.",
+  "generated": "2026-06-06",
+  "phase": "7",
+  "artifact": "AR2",
+  "algorithm": "Kahn topological sort (BFS by in-degree)",
+  "nodes": ["STORY-001", "STORY-002", "STORY-004", "STORY-005", "STORY-038", "STORY-008", "STORY-014", "STORY-009", "STORY-034", "STORY-011", "STORY-003"],
+  "edges": [
+    { "from": "STORY-001", "to": "STORY-038", "reason": "Auth tenant substrate needs the tenant_id column from the Postgres schema." },
+    { "from": "STORY-001", "to": "STORY-008", "reason": "Upload persists a documents row; needs the documents table/migrations." },
+    { "from": "STORY-001", "to": "STORY-014", "reason": "Router reads sections (L1/L2) from Postgres to scope retrieval." },
+    { "from": "STORY-001", "to": "STORY-034", "reason": "DPDP access reads documents/sections + pii_flags columns from the schema." },
+    { "from": "STORY-002", "to": "STORY-003", "reason": "Embed+upsert targets the Qdrant collection + payload schema." },
+    { "from": "STORY-002", "to": "STORY-014", "reason": "Router-side scoped-retrieval filter relies on the section_id/tenant_id payload index." },
+    { "from": "STORY-004", "to": "STORY-008", "reason": "Upload endpoint mounts on the FastAPI service skeleton (Docker + health/ready)." },
+    { "from": "STORY-008", "to": "STORY-009", "reason": "Native TOC extraction runs on the uploaded/parsed document from the upload endpoint." },
+    { "from": "STORY-009", "to": "STORY-011", "reason": "Section-aware chunking needs the extracted TOC section boundaries." },
+    { "from": "STORY-011", "to": "STORY-003", "reason": "Embedding+upsert consumes section-aware chunks." },
+    { "from": "STORY-038", "to": "STORY-034", "reason": "DPDP access endpoint is an authenticated, tenant-scoped op; needs auth/tenant substrate." }
+  ],
+  "in_degree_initial": {
+    "STORY-001": 0, "STORY-002": 0, "STORY-004": 0, "STORY-005": 0,
+    "STORY-038": 1, "STORY-008": 2, "STORY-014": 2,
+    "STORY-009": 1, "STORY-034": 2,
+    "STORY-011": 1, "STORY-003": 2
+  },
+  "is_dag": true,
+  "cycle": "none",
+  "execution_groups": [
+    ["STORY-001", "STORY-002", "STORY-004", "STORY-005"],
+    ["STORY-038", "STORY-008", "STORY-014"],
+    ["STORY-009", "STORY-034"],
+    ["STORY-011"],
+    ["STORY-003"]
+  ],
+  "execution_groups_detail": [
+    { "wave": 0, "stories": ["STORY-001", "STORY-002", "STORY-004", "STORY-005"], "agents": ["database-engineer", "database-engineer", "devops-engineer", "devops-engineer"], "note": "Foundation layer: Postgres schema, Qdrant payload, service skeleton, CI gate. All in-degree 0; fully parallel. (DB engineer serializes 001 then 002; DevOps serializes 004 then 005 - cross-agent parallel, intra-agent sequential.)" },
+    { "wave": 1, "stories": ["STORY-038", "STORY-008", "STORY-014"], "agents": ["python-backend-engineer", "python-backend-engineer", "ai-engineer"], "note": "Auth/tenant substrate, PDF upload endpoint, LangGraph router. All deps in wave 0. (Backend serializes 038 then 008; ai-engineer runs 014 in parallel.)" },
+    { "wave": 2, "stories": ["STORY-009", "STORY-034"], "agents": ["data-engineer", "python-backend-engineer"], "note": "Native TOC extraction (after upload), DPDP access (after auth). Parallel across data-engineer and backend." },
+    { "wave": 3, "stories": ["STORY-011"], "agents": ["data-engineer"], "note": "Section-aware chunking; needs TOC (009)." },
+    { "wave": 4, "stories": ["STORY-003"], "agents": ["data-engineer"], "note": "Embedding + idempotent upsert; needs chunks (011) + Qdrant payload (002)." }
+  ],
+  "proof": {
+    "method": "Kahn's algorithm: repeatedly emit all nodes with in-degree 0 as a parallel wave, remove their out-edges, decrement successors' in-degree, repeat.",
+    "total_nodes": 11,
+    "nodes_emitted": 11,
+    "remaining_nodes_after_sort": 0,
+    "assertion": "All 11 nodes were emitted across 5 waves with 0 nodes remaining; therefore no cycle exists and the graph is a proven DAG.",
+    "longest_path": ["STORY-004", "STORY-008", "STORY-009", "STORY-011", "STORY-003"],
+    "longest_path_length": 5,
+    "critical_path_note": "The ingestion chain (skeleton -> upload -> TOC -> chunk -> embed) is the critical path; it gates Sprint-1 end-to-end demo of upload -> route."
+  }
+}

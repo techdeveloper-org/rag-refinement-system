@@ -281,7 +281,7 @@
       "depends_on": [
         "TODO-07"
       ],
-      "status": "in_progress",
+      "status": "done",
       "agents": [
         "orchestrator-agent",
         "agile-business-mathematics-expert",
@@ -301,7 +301,13 @@
       "gate": "ROUTING APPROVED; RS=1.0; STOP 7",
       "stop_point": "STOP 7 user review",
       "context_file": "todos/todo-08-phase7-agent-task-routing.md",
-      "completed_artifacts": []
+      "completed_artifacts": [
+        "docs/phase-7-routing/ar1_assignments.json",
+        "docs/phase-7-routing/ar2_dag_proof.json",
+        "docs/phase-7-routing/ar3_context_windows.json",
+        "docs/phase-7-routing/implementation_execution_plan.json",
+        "docs/phase-7-routing/routing_verdict.json"
+      ]
     },
     {
       "id": "TODO-09",
@@ -311,7 +317,7 @@
       "depends_on": [
         "TODO-08"
       ],
-      "status": "pending",
+      "status": "in_progress",
       "agents": [
         "business-analyst-agent",
         "product-manager-agent",

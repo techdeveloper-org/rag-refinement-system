@@ -1,0 +1,50 @@
+{
+  "$comment": "Phase 7 (TODO-08) Agent-Task Routing consensus verdict. consensus-agent (BINARY APPROVED/REJECTED) gate over AR1 (assignments + Maker-Checker + scores), AR2 (DAG proof), AR3 (context windows + PII isolation), AR4 (CoT prompts). reliability-auditor RS, hallucination-detector + context-faithfulness-engineer checks, and security-testing-engineer P1 OWASP coverage all folded in. Source: ar1_assignments.json, ar2_dag_proof.json, ar3_context_windows.json, implementation_execution_plan.json.",
+  "generated": "2026-06-06",
+  "phase": "7",
+  "artifact": "routing_verdict",
+  "verdict": "ROUTING APPROVED",
+  "gate": "ROUTING APPROVED; RS=1.0; STOP 7",
+  "all_scores_ge_075": true,
+  "min_routing_score": 0.88,
+  "maker_checker_violations": 0,
+  "is_dag": true,
+  "cycle": "none",
+  "execution_groups": [
+    ["STORY-001", "STORY-002", "STORY-004", "STORY-005"],
+    ["STORY-038", "STORY-008", "STORY-014"],
+    ["STORY-009", "STORY-034"],
+    ["STORY-011"],
+    ["STORY-003"]
+  ],
+  "rs": 1.0,
+  "security_p1_covered": true,
+  "security_p1_detail": {
+    "auth_story": { "story": "STORY-038", "review_agent": "auth-security-specialist", "covered": true },
+    "pii_story": { "story": "STORY-034", "review_agent": "security-compliance-mapper", "covered": true },
+    "llm_injection_story": { "story": "STORY-014", "review_agent": "threat-modeling-specialist", "covered": true },
+    "security_gate_story": { "story": "STORY-005", "review_agent": "secrets-detection-specialist", "covered": true },
+    "payment_gateway_story": "none (no PaymentGateway in product scope)",
+    "owasp_llm_top10_router": "STORY-014 review enforces LLM01 prompt injection + strict-JSON + deterministic fallback per ADV-004/NFR-008"
+  },
+  "open_items": 0,
+  "checks": {
+    "all_agents_in_master_kg": true,
+    "kg_version": "29.9.16",
+    "context_budget_header_present_all_prompts": true,
+    "zero_placeholders_all_prompts": true,
+    "pii_isolation": { "cross_story_bleed": false, "cross_tenant_bleed": false, "pii_values_in_windows": false },
+    "hallucination_check": "0 fabricated agents, 0 invented FRs/ACs, 0 phantom API operationIds. Every assignment, edge, window, and prompt binds to real Sprint-1 stories, real KG agents, and real openapi operationIds (routeQuery, answerQuery, ingestDocument, listDocuments, getDocument, deleteDocument, getDocumentToc, exportDocumentData, getHealth, getReadiness).",
+    "context_faithfulness": "All routing honors the 10 ADRs and AGREED CONTRACTS (in-process async router, /v1/route routing-only, section_id universal key, data-engineer owns embed+upsert, devops health/ready, threat-modeling<->ai-engineer OWASP-LLM, security-compliance-mapper<->SA DPDP).",
+    "reliability_audit": "RS=1.0: every Sprint-1 story has a dev_agent + a distinct review_agent (Maker-Checker), a routing_score>=0.75, a bounded isolated context window, and 3 model-aware CoT prompts; the dependency graph is a proven DAG with a valid 5-wave execution order; no open items."
+  },
+  "artifacts_written": [
+    "docs/phase-7-routing/ar1_assignments.json",
+    "docs/phase-7-routing/ar2_dag_proof.json",
+    "docs/phase-7-routing/ar3_context_windows.json",
+    "docs/phase-7-routing/implementation_execution_plan.json",
+    "docs/phase-7-routing/routing_verdict.json"
+  ],
+  "stop_point": "STOP 7 user review",
+  "github_calls_made": false
+}
