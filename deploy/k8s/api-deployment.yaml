@@ -1,0 +1,94 @@
+# Kubernetes Deployment for the RAG Refinement API (alternative to the prod compose).
+#
+# cloud-security-architect sign-off:
+#   - runAsNonRoot + runAsUser 1000 (image already non-root; enforced here too).
+#   - readOnlyRootFilesystem, drop ALL caps, no privilege escalation, seccomp.
+#   - NO secrets in the manifest: all credentials come from the `rag-secrets`
+#     Secret (created from a secret manager via External Secrets Operator /
+#     Sealed Secrets — see deploy/k8s/secret.example.yaml, which is a template only).
+#   - Liveness -> /health, Readiness -> /ready (NFR-009). Traffic is held until
+#     dependencies are reachable, avoiding 503s on rollout.
+#   - Resource requests/limits set. TLS terminates at the Ingress (see ingress.yaml).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-api
+  labels:
+    app: rag-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: rag-api
+  template:
+    metadata:
+      labels:
+        app: rag-api
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: api
+          image: registry.example.com/rag-refinement-api:1.0.0 # set to your pushed tag
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - secretRef:
+                name: rag-secrets # provides DATABASE_URL, QDRANT_*, *_API_KEY, JWT_SECRET, API_KEY_SALT
+          env:
+            - name: LANGSMITH_PROJECT
+              value: rag-refinement-prod
+            - name: READINESS_TIMEOUT_SECONDS
+              value: "2.0"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "2"
+              memory: "1Gi"
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-api
+  labels:
+    app: rag-api
+spec:
+  selector:
+    app: rag-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8000
+  type: ClusterIP

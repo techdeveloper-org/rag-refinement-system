@@ -567,7 +567,7 @@
       "depends_on": [
         "TODO-16"
       ],
-      "status": "pending",
+      "status": "done",
       "agents": [
         "devops-engineer",
         "cloud-security-architect"
@@ -580,7 +580,13 @@
       "gate": "RS=1.0 satisfied; healthchecks green",
       "stop_point": "User reviews live deploy",
       "context_file": "todos/todo-17-phaseg-deploy-and-readme-refresh.md",
-      "completed_artifacts": []
+      "completed_artifacts": [
+        "README.md",
+        "deploy/",
+        "docs/phase-G-deploy/",
+        "backend/app/productization/",
+        "backend/app/api/observability.py"
+      ]
     }
   ]
 }

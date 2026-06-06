@@ -1,0 +1,41 @@
+# Reverse proxy + automatic TLS for the RAG Refinement System (example).
+#
+# Caddy is the simplest production TLS-terminating front door: it obtains and
+# renews Let's Encrypt certificates automatically and is the ONLY internet-facing
+# component. The api and frontend containers sit on the internal `edge` network
+# and are never published to the host directly (see deploy/docker-compose.prod.yml).
+#
+# Replace app.example.com with your domain. To use this, add a `caddy` service to
+# the prod compose on the `edge` network, mount this file at /etc/caddy/Caddyfile,
+# and publish only 80/443 from that one service.
+#
+# Equivalent setups: Traefik (label-driven), nginx + certbot, or a cloud LB
+# (AWS ALB / GCP HTTPS LB) with ACM/managed certs terminating TLS.
+
+app.example.com {
+	# Enforce modern TLS; Caddy negotiates TLS 1.2+ and a secure cipher suite by
+	# default and redirects http->https automatically.
+
+	# Security response headers (defense-in-depth for the SPA + API).
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# API surface -> FastAPI backend (routing-only /v1/route, streaming /v1/answer,
+	# documents, compliance, /health, /ready, /metrics).
+	handle_path /api/* {
+		reverse_proxy api:8000 {
+			# SSE for /v1/answer: do not buffer the streamed response.
+			flush_interval -1
+		}
+	}
+
+	# Everything else -> static SPA bundle served by the non-root nginx container.
+	handle {
+		reverse_proxy frontend:8080
+	}
+}
