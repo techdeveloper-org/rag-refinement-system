@@ -123,7 +123,9 @@ def rate_limit(*, sensitive: bool = False) -> Callable[..., Principal]:
             if sensitive
             else settings.rate_limit_default_per_minute
         )
-        get_rate_limiter().check(principal.rate_limit_key, limit)
+        scope = "sensitive" if sensitive else "default"
+        bucket = f"{principal.rate_limit_key}:{scope}"
+        get_rate_limiter().check(bucket, limit)
         return principal
 
     return dependency

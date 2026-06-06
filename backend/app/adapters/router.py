@@ -33,6 +33,37 @@ RouteCallable = Callable[..., Awaitable[Mapping[str, Any]]]
 """Signature of ``router.route`` (kept injectable for offline tests)."""
 
 
+def _merge_fairly(
+    sections: list[RoutedSection], max_sections: int
+) -> list[RoutedSection]:
+    """Merge per-document routed sections fairly and deterministically (FIX-9).
+
+    Every contributing document is represented before any document receives a
+    second slot, then the remaining slots are filled by descending confidence.
+    Ordering is fully deterministic (confidence desc, then ``document_id``, then
+    ``section_id``) so the result never depends on the input document order, and a
+    single saturating document cannot crowd out the others. Single-document
+    routing is unchanged (plain confidence order).
+
+    Args:
+        sections: All routed sections across the target documents.
+        max_sections: Maximum number of sections to return.
+
+    Returns:
+        The fairly merged, capped section list.
+    """
+    by_doc: dict[str, list[RoutedSection]] = {}
+    for section in sections:
+        by_doc.setdefault(section.document_id, []).append(section)
+    for grouped in by_doc.values():
+        grouped.sort(key=lambda s: (-s.confidence, s.section_id))
+    representatives = [grouped[0] for grouped in by_doc.values()]
+    remainder = [section for grouped in by_doc.values() for section in grouped[1:]]
+    representatives.sort(key=lambda s: (-s.confidence, s.document_id, s.section_id))
+    remainder.sort(key=lambda s: (-s.confidence, s.document_id, s.section_id))
+    return (representatives + remainder)[:max_sections]
+
+
 def _toc_from_sections(sections: Sequence[SectionRecord]) -> list[dict[str, Any]]:
     """Shape structure-store sections into the router's TOC entry list.
 
@@ -165,9 +196,11 @@ class RouterModuleAdapter:
 
         For a single document this is one ``router.route`` call against its
         authoritative TOC. For multiple documents (ADV-006) it fans out one call
-        per document and merges the selected sections by descending confidence,
-        capped at ``max_sections``. Fallback is reported when no document produced
-        a section. The generation LLM is never invoked.
+        per document and merges the selected sections fairly: every contributing
+        document is represented before any document receives a second slot, then
+        the remaining slots are filled by descending confidence with a
+        deterministic tiebreak, capped at ``max_sections``. Fallback is reported
+        when no document produced a section. The generation LLM is never invoked.
 
         Args:
             tenant_id: Owning tenant (IDOR guard).
@@ -192,7 +225,7 @@ class RouterModuleAdapter:
             if rationale:
                 rationales.append(str(rationale))
 
-        merged = sorted(all_sections, key=lambda s: s.confidence, reverse=True)[:max_sections]
+        merged = _merge_fairly(all_sections, max_sections)
         fallback = not merged
         rationale = " ".join(rationales) if rationales else None
         return RouterDecision(

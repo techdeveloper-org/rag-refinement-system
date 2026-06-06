@@ -20,7 +20,6 @@ from backend.app.adapters.generation import ClaudeGenerationLLM, _build_context
 from backend.app.adapters.ingestor import (
     PipelineIngestor,
     _ingest_status,
-    _section_id,
     _total_pages,
 )
 from backend.app.adapters.router import RouterModuleAdapter
@@ -30,7 +29,7 @@ from backend.app.api.interfaces import (
     RoutedSection,
     SectionRecord,
 )
-from ingestion.pipeline import _DOC_ID_NAMESPACE  # noqa: F401 - parity reference
+from ingestion import section_id_for
 
 pytestmark = pytest.mark.anyio
 
@@ -186,6 +185,47 @@ class TestRouterAdapter:
             ("tenant_a", "doc_bbbbbb"),
         ]
 
+    async def test_multi_document_merge_is_fair_across_documents(self) -> None:
+        """A saturating document cannot crowd out other contributing docs (FIX-9)."""
+        store = _StubStore(
+            {
+                "doc_aaaaaa": [
+                    _section("sec_a1", "tenant_a", 1, 2),
+                    _section("sec_a2", "tenant_a", 3, 4),
+                    _section("sec_a3", "tenant_a", 5, 6),
+                ],
+                "doc_bbbbbb": [_section("sec_b1", "tenant_a", 7, 8)],
+            }
+        )
+        scores = {"sec_a1": 0.95, "sec_a2": 0.94, "sec_a3": 0.93, "sec_b1": 0.80}
+
+        async def fake_route(query: str, doc_id: str, toc: list[dict], **kwargs: Any) -> dict:
+            ids = [entry["section_id"] for entry in toc]
+            return {
+                "relevant_sections": ids,
+                "page_ranges": [[e["page_start"], e["page_end"]] for e in toc],
+                "confidence": [scores[i] for i in ids],
+                "fallback": False,
+                "routing_time_ms": 5,
+                "rationale": f"doc {doc_id}",
+            }
+
+        adapter = RouterModuleAdapter(store, fake_route)
+        decision = await adapter.route(
+            tenant_id="tenant_a",
+            document_ids=["doc_aaaaaa", "doc_bbbbbb"],
+            query="q",
+            confidence_threshold=0.5,
+            max_sections=2,
+        )
+
+        selected = [s.section_id for s in decision.relevant_sections]
+        assert selected == ["sec_a1", "sec_b1"]
+        assert {s.document_id for s in decision.relevant_sections} == {
+            "doc_aaaaaa",
+            "doc_bbbbbb",
+        }
+
     async def test_max_sections_caps_merged_result(self) -> None:
         """The merged multi-document result is capped at max_sections."""
         store = _StubStore(
@@ -282,7 +322,7 @@ class TestPipelineIngestor:
         assert outcome.ingest_status == "indexed"
         assert outcome.deduplicated is False
         assert [s.title for s in outcome.toc] == ["Intro", "Body"]
-        assert outcome.toc[0].section_id == _section_id("doc_new123", 0)
+        assert outcome.toc[0].section_id == section_id_for("doc_new123", 0)
         assert captured["tenant_id"] == "tenant_a"
 
     async def test_dedup_detected_from_prior_hash(self) -> None:

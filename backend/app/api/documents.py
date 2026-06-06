@@ -36,17 +36,20 @@ from backend.app.api.schemas import (
 )
 from backend.app.errors import (
     document_not_found,
+    payload_too_large,
     service_unavailable,
     unsupported_media_type,
     validation_error,
 )
 from backend.app.security.auth import Principal
 from backend.app.security.rate_limit import rate_limit
+from backend.app.settings import get_settings
 
 router = APIRouter(prefix="/v1/documents", tags=["Documents"])
 
 _PDF_CONTENT_TYPE = "application/pdf"
 _RESIDENCY_REGIONS = {"IN", "EU", "US", "GLOBAL"}
+_UPLOAD_CHUNK_BYTES = 1 * 1024 * 1024
 
 
 def _now_iso() -> str:
@@ -56,6 +59,36 @@ def _now_iso() -> str:
         The timezone-aware current UTC timestamp.
     """
     return _dt.datetime.now(_dt.UTC).isoformat()
+
+
+async def _read_capped(file: UploadFile, max_bytes: int) -> bytes:
+    """Read the upload body in chunks, rejecting once the cap is exceeded.
+
+    Streams the body in fixed-size chunks rather than reading an unbounded body
+    into memory, so a hostile or accidental oversize upload is rejected with 413
+    after at most ``max_bytes`` (plus one chunk) have been buffered.
+
+    Args:
+        file: The incoming multipart upload.
+        max_bytes: Maximum number of body bytes to accept.
+
+    Returns:
+        The fully read body bytes when within the cap.
+
+    Raises:
+        ProblemException: 413 when the body exceeds ``max_bytes``.
+    """
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(_UPLOAD_CHUNK_BYTES)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise payload_too_large()
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 def _to_document_schema(record: DocumentRecord) -> Document:
@@ -138,14 +171,14 @@ async def ingest_document(
         ProblemException: 415 for a non-PDF upload; 422 for an invalid
             residency region; 503 when ingestion is unreachable.
     """
-    if file.content_type and file.content_type != _PDF_CONTENT_TYPE:
+    if not file.content_type or file.content_type != _PDF_CONTENT_TYPE:
         raise unsupported_media_type()
     if residency_region not in _RESIDENCY_REGIONS:
         raise validation_error(
             errors=[{"field": "residency_region", "message": "must be IN, EU, US, or GLOBAL"}]
         )
 
-    content = await file.read()
+    content = await _read_capped(file, get_settings().max_upload_bytes)
     if not content:
         raise validation_error(errors=[{"field": "file", "message": "file is empty"}])
 

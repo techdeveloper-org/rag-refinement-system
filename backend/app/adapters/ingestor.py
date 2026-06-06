@@ -13,22 +13,24 @@ the async event loop is never blocked), and maps the result dict onto
 the pipeline's ``fallback_only``; ``deduplicated`` is detected by a pre-call hash
 lookup on the section store; ``total_pages`` is read from the resolved TOC. The
 pipeline's TOC dicts (``{level, title, page_start, page_end}``) are shaped into
-:class:`SectionRecord` entries with deterministic section ids matching the
-pipeline's own ``section_id`` derivation so the TOC join stays consistent.
+:class:`SectionRecord` entries whose section ids are derived through
+``ingestion.section_id_for`` - the single source of truth shared with the
+pipeline (FIX-1) - so the adapter's TOC ids exactly match the prefixed, hyphen-free
+ids the pipeline persisted to Postgres and stamped on Qdrant payloads, and so they
+satisfy the backend ``SectionId`` schema pattern.
 """
 
 from __future__ import annotations
 
-import uuid
 from collections.abc import Callable
 from typing import Any
 
 import anyio
 
 from backend.app.api.interfaces import IngestOutcome, SectionRecord
+from ingestion import section_id_for
 from ingestion.parser import Parser, content_hash
 from ingestion.pipeline import (
-    _DOC_ID_NAMESPACE,
     IngestInput,
     SectionStore,
     VectorStore,
@@ -43,38 +45,27 @@ _INGEST_STATUS_EPHEMERAL = "ephemeral"
 _INGEST_STATUS_INDEXED = "indexed"
 
 
-def _section_id(doc_id: str, ordinal: int) -> str:
-    """Derive the deterministic section id the pipeline uses for the nth section.
-
-    Mirrors ``ingestion.pipeline._section_id`` so the backend TOC ids match the
-    ids persisted to Postgres and stamped on Qdrant payloads.
-
-    Args:
-        doc_id: Owning document id.
-        ordinal: Zero-based section ordinal.
-
-    Returns:
-        A deterministic UUID5 string used as ``section_id``.
-    """
-    return str(uuid.uuid5(_DOC_ID_NAMESPACE, f"{doc_id}:section:{ordinal}"))
-
-
 def _toc_to_records(
     doc_id: str, tenant_id: str, toc: list[dict[str, Any]]
 ) -> list[SectionRecord]:
     """Shape the pipeline's TOC dicts into backend SectionRecord entries.
 
+    Section ids are derived through ``ingestion.section_id_for`` (FIX-1), the
+    single source of truth shared with the pipeline, so the adapter's TOC ids are
+    byte-for-byte identical to the prefixed, hyphen-free ids the pipeline persisted
+    and so they satisfy the backend ``SectionId`` schema pattern.
+
     Args:
-        doc_id: Owning document id (for deterministic section ids).
+        doc_id: Owning document id (seed for the canonical section ids).
         tenant_id: Owning tenant (IDOR guard).
         toc: Pipeline TOC dicts ``{level, title, page_start, page_end}`` in order.
 
     Returns:
-        One :class:`SectionRecord` per TOC entry, with deterministic ids.
+        One :class:`SectionRecord` per TOC entry, with canonical section ids.
     """
     return [
         SectionRecord(
-            section_id=_section_id(doc_id, ordinal),
+            section_id=section_id_for(doc_id, ordinal),
             tenant_id=tenant_id,
             title=entry.get("title"),
             level=int(entry.get("level", 1)),

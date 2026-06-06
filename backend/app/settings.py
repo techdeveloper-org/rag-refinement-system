@@ -24,6 +24,9 @@ class Settings(BaseSettings):
         database_url: PostgreSQL DSN used by the readiness probe.
         qdrant_url: Qdrant base URL used by the readiness probe.
         readiness_timeout_seconds: Per-dependency probe timeout budget.
+        max_upload_bytes: Maximum accepted upload body size in bytes; an upload
+            exceeding this is rejected with 413 before the body is fully read
+            (DoS guard, NFR-008). Defaults to 50 MiB.
     """
 
     model_config = SettingsConfigDict(
@@ -55,6 +58,10 @@ class Settings(BaseSettings):
     )
     rate_limit_sensitive_per_minute: int = Field(
         default=20, alias="RATE_LIMIT_SENSITIVE_PER_MINUTE"
+    )
+
+    max_upload_bytes: int = Field(
+        default=50 * 1024 * 1024, alias="MAX_UPLOAD_BYTES"
     )
 
 
