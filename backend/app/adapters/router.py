@@ -32,6 +32,22 @@ from backend.app.api.interfaces import (
 RouteCallable = Callable[..., Awaitable[Mapping[str, Any]]]
 """Signature of ``router.route`` (kept injectable for offline tests)."""
 
+_NO_DOCUMENT_GROUP = object()
+"""Sentinel group key for a section whose owning ``document_id`` is ``None``.
+
+A distinct object identity is used so an unset (``None``) owning document never
+collides with a genuinely empty-string ``document_id`` and the two are never
+coalesced into a single fairness group (FIX-8).
+"""
+
+_NO_DOCUMENT_SORT_KEY = ""
+"""Cross-document tiebreak value for the ``None`` owning-document group.
+
+Sections with a ``None`` owning document sort before any real string id under
+the deterministic ``(-confidence, document_id, ...)`` ordering; the live routing
+path always stamps a real id, so this only orders the hardened helper path.
+"""
+
 
 def _merge_fairly(
     sections: list[RoutedSection], max_sections: int
@@ -40,23 +56,25 @@ def _merge_fairly(
 
     Every contributing document is represented before any document receives a
     second slot, then the remaining slots are filled by descending confidence.
-    Ties are broken by the router's original emission order (the position of each
-    section in ``sections``), so the result never depends on the input document
-    order and a single saturating document cannot crowd out the others while
-    equal-confidence sections keep the exact order the router emitted them.
 
-    Single-document routing is unchanged from the pre-fairness behavior: with one
-    contributing document every section shares the same group, so the output is
-    the router's emitted order sorted only by descending confidence with the
-    emission index as a stable tiebreaker (no reordering of tied sections).
+    Tie handling depends on whether the tied sections come from the same document:
+
+    * Within a single document, equal-confidence sections keep the exact order
+      the router emitted them (the per-document emission index), so single-document
+      routing is unchanged and tied sections are never reordered.
+    * Across documents, equal-confidence sections are ordered deterministically by
+      ``document_id`` and then by the per-document emission index. This ordering
+      does not depend on the order of ``document_ids`` in the request, so swapping
+      the request's document order yields the same merged output.
 
     When more contributing documents are present than ``max_sections``, not every
     document can be represented; the highest-confidence representatives (with the
-    emission-order tiebreak) fill the available slots.
+    cross-document tiebreak) fill the available slots.
 
-    The ``document_id`` group key coalesces ``None`` to ``""`` so a section with
-    an unset owning document is grouped and ordered safely (FIX-8); the live
-    routing path always stamps a non-None id, so this only hardens the helper.
+    A section whose owning ``document_id`` is ``None`` is placed in its own
+    fairness group keyed by a distinct sentinel, so it is never merged with a
+    section carrying a genuinely empty-string id (FIX-8). The live routing path
+    always stamps a non-None id, so this only hardens the helper.
 
     Args:
         sections: All routed sections across the target documents, in the
@@ -66,21 +84,35 @@ def _merge_fairly(
     Returns:
         The fairly merged, capped section list.
     """
-    order_by_id = {id(section): index for index, section in enumerate(sections)}
-
-    def _emission_index(section: RoutedSection) -> int:
-        """Return the router's emission position for stable tie ordering."""
-        return order_by_id[id(section)]
-
-    by_doc: dict[str, list[RoutedSection]] = {}
+    by_doc: dict[object, list[RoutedSection]] = {}
+    emission_index: dict[int, int] = {}
     for section in sections:
-        by_doc.setdefault(section.document_id or "", []).append(section)
+        group_key: object = (
+            _NO_DOCUMENT_GROUP
+            if section.document_id is None
+            else section.document_id
+        )
+        grouped = by_doc.setdefault(group_key, [])
+        emission_index[id(section)] = len(grouped)
+        grouped.append(section)
+
+    def _cross_doc_key(section: RoutedSection) -> tuple[float, str, int]:
+        """Order tied cross-document sections independent of the request order."""
+        doc_sort_key = (
+            _NO_DOCUMENT_SORT_KEY
+            if section.document_id is None
+            else section.document_id
+        )
+        return (-section.confidence, doc_sort_key, emission_index[id(section)])
+
     for grouped in by_doc.values():
-        grouped.sort(key=lambda s: (-s.confidence, _emission_index(s)))
+        grouped.sort(
+            key=lambda s: (-s.confidence, emission_index[id(s)])
+        )
     representatives = [grouped[0] for grouped in by_doc.values()]
     remainder = [section for grouped in by_doc.values() for section in grouped[1:]]
-    representatives.sort(key=lambda s: (-s.confidence, _emission_index(s)))
-    remainder.sort(key=lambda s: (-s.confidence, _emission_index(s)))
+    representatives.sort(key=_cross_doc_key)
+    remainder.sort(key=_cross_doc_key)
     return (representatives + remainder)[:max_sections]
 
 

@@ -346,6 +346,49 @@ class TestMergeFairly:
 
         assert [s.section_id for s in merged] == ["sec_z", "sec_a", "sec_m"]
 
+    def test_cross_document_tie_order_is_independent_of_input_order(self) -> None:
+        """Swapping the fan-out order of tied cross-document sections is a no-op (FIX-7).
+
+        Two documents contribute one tied-confidence section each. Reversing the
+        order they were appended in (which mirrors reordering ``document_ids`` in
+        the request) must yield byte-identical merged output, because the
+        cross-document tiebreak sorts by ``document_id`` rather than by input
+        order.
+        """
+        forward = [
+            self._routed("sec_a", 0.8, "doc_aaaaaa"),
+            self._routed("sec_b", 0.8, "doc_bbbbbb"),
+        ]
+        reversed_order = [
+            self._routed("sec_b", 0.8, "doc_bbbbbb"),
+            self._routed("sec_a", 0.8, "doc_aaaaaa"),
+        ]
+
+        forward_ids = [s.section_id for s in _merge_fairly(forward, max_sections=2)]
+        reversed_ids = [
+            s.section_id for s in _merge_fairly(reversed_order, max_sections=2)
+        ]
+
+        assert forward_ids == reversed_ids == ["sec_a", "sec_b"]
+
+    def test_none_and_empty_string_document_ids_are_not_grouped(self) -> None:
+        """A ``None`` owning document is never coalesced with an empty-string id (FIX-8).
+
+        With ``max_sections`` equal to the document count, fair representation
+        emits one section from every distinct fairness group. If ``None`` and
+        ``""`` collapsed into one group, only one of the two tied sections would
+        be represented and the second would be demoted to the remainder; keeping
+        them distinct yields both as representatives.
+        """
+        sections = [
+            self._routed("sec_none", 0.8, None),
+            self._routed("sec_empty", 0.8, ""),
+        ]
+
+        merged = _merge_fairly(sections, max_sections=2)
+
+        assert {s.section_id for s in merged} == {"sec_none", "sec_empty"}
+
 
 # --- FIX-C-02: PipelineIngestor ---------------------------------------------
 
