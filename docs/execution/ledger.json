@@ -173,7 +173,7 @@
       "depends_on": [
         "TODO-04"
       ],
-      "status": "in_progress",
+      "status": "done",
       "agents": [
         "business-analyst-agent",
         "product-manager-agent",
@@ -190,7 +190,14 @@
       "gate": "GRAND BLUEPRINT APPROVED",
       "stop_point": "User reviews grand blueprint",
       "context_file": "todos/todo-05-phase4-fullstack-reconciliation.md",
-      "completed_artifacts": []
+      "status_note": "GRAND BLUEPRINT APPROVED (1 round, 3 conflicts found and resolved in-session, 11 advisories). Awaiting user review at STOP point.",
+      "completed_artifacts": [
+        "docs/phase-4-reconciliation/grand_advisory_items.json",
+        "docs/phase-4-reconciliation/grand_blueprint_verdict.json",
+        "docs/phase-4-reconciliation/hld_v3.md",
+        "docs/phase-4-reconciliation/design_spec_v2_notes.md",
+        "docs/phase-4-reconciliation/reconciliation_matrix.md"
+      ]
     },
     {
       "id": "TODO-06",
@@ -200,7 +207,7 @@
       "depends_on": [
         "TODO-05"
       ],
-      "status": "pending",
+      "status": "in_progress",
       "agents": [
         "business-analyst-agent",
         "product-manager-agent",

@@ -1,0 +1,62 @@
+{
+  "$comment": "Phase 4 (TODO-05) Full-Stack Blueprint Reconciliation verdict. Binary gate (GRAND BLUEPRINT APPROVED / REJECTED - no partial states). Reconciles architecture (HLD + openapi.yaml) against design (phase-3) across BA + PM + SA + UI/UX. consensus-agent + hallucination-detector + context-faithfulness-engineer roles applied.",
+  "phase": "4",
+  "generated": "2026-06-06",
+  "verdict": "GRAND BLUEPRINT APPROVED",
+  "gate_type": "BINARY (GRAND BLUEPRINT APPROVED / GRAND BLUEPRINT REJECTED - no partial states)",
+  "reviewer": "consensus-agent",
+  "rounds": 1,
+  "conflicts_found": 3,
+  "conflicts_resolved_in_session": 3,
+  "advisory_count": 11,
+  "phase2_advisories_carried": 8,
+  "phase4_new_findings": 3,
+  "open_items": 0,
+  "critical_open": 0,
+  "domains_reconciled": ["business-analyst", "product-manager", "solution-architect", "ui-ux-designer"],
+  "gate_checks": {
+    "ui_component_to_api_field_binding": "PASS - all 8 audited components bind to real openapi.yaml fields (reconciliation_matrix.md, 8/8 rows CONSISTENT after in-session fixes)",
+    "api_response_for_ui_exists": "PASS - every field the UI needs exists on the response it consumes; no invented shape",
+    "sse_streaming_path": "PASS - TokenEvent.token -> AnswerFinalEvent.answer; mid-stream event:error->Problem honored by design (ErrorState MidStream + role=alert)",
+    "citation_path": "PASS - AnswerFinalEvent.citations[] = Citation{section_title, page_start, page_end}; page-range authority from Postgres sections (OAQ-3)",
+    "confidence_path": "PASS - ConfidenceMeter binds routing.confidence[] via defined reduction max(confidence[]) (GRC-002); PRD 8.3 thresholds",
+    "explainability_path": "PASS - ExplainabilityPanel binds routing.rationale + sections[] x confidence[] joined to TocResponse.toc[] by section_id (GRC-001)",
+    "fallback_mode_ui_matches_router_contract": "PASS - FallbackBanner/ConfidenceMeter Fallback variant match routing.fallback (query-time), TocResponse.fallback_only (structural), 503 SERVICE_UNAVAILABLE (degraded)",
+    "adr_compliance": "PASS - 10 ADRs honored; no openapi.yaml modification; in-process async router; /v1/route routing-only; /v1/answer SSE",
+    "agreed_contracts_compliance": "PASS - team-alignment AGREED CONTRACTS honored; section_id universal join key throughout",
+    "hallucination": "PASS - 0 fabricated API fields, 0 invented response shapes, 0 phantom FRs",
+    "context_faithfulness": "PASS - all resolutions traceable to openapi.yaml/hld.md; no unsourced claims"
+  },
+  "in_session_fixes": [
+    "GRC-001 (CRITICAL): ExplainabilityPanel renders section title/page-range via client-side join of routing.sections[i] (section_id) to the already-loaded TocResponse.toc[]; recorded in hld_v3.md §R1. No openapi.yaml change.",
+    "GRC-002 (MEDIUM): ConfidenceMeter scalar = max(routing.confidence[]); fallback variant when routing.fallback or empty array; recorded in design_spec_v2_notes.md.",
+    "GRC-003 (LOW): Ingest badge mapping aligned to IngestResponse.ingest_status enum [indexed, fallback_only, ephemeral] and Document.fallback_only; recorded in design_spec_v2_notes.md."
+  ],
+  "artifacts_written": [
+    "docs/phase-4-reconciliation/grand_advisory_items.json",
+    "docs/phase-4-reconciliation/grand_blueprint_verdict.json",
+    "docs/phase-4-reconciliation/hld_v3.md",
+    "docs/phase-4-reconciliation/design_spec_v2_notes.md",
+    "docs/phase-4-reconciliation/reconciliation_matrix.md"
+  ],
+  "hld_v3_written": true,
+  "hld_v3_reason": "SA recorded one additive in-place binding-path note (§R1) resolving GRC-001 (ExplainabilityPanel TOC join). No structural HLD changes; hld.md §1-8 stand unchanged.",
+  "design_spec_v2_notes_written": true,
+  "design_spec_v2_notes_reason": "UI/UX recorded two design-side binding rules (GRC-002 confidence reduction, GRC-003 badge mapping). No wireframe/token changes; phase-3 design stands unchanged.",
+  "needs_user_decision": [
+    {
+      "id": "DUD-1",
+      "topic": "Theme mode (carried from Phase 3)",
+      "question": "Ship light theme only for MVP, or also a dark theme?",
+      "recommended_default": "Light theme only for MVP (all APCA values computed for light). Dark theme is an additive Phase-B token set; defer to keep the MVP surface small."
+    },
+    {
+      "id": "DUD-2",
+      "topic": "Rerank control visibility (FR-016, carried from Phase 3)",
+      "question": "Expose the per-request rerank toggle in the personal-tool composer, or keep it backend-default-off?",
+      "recommended_default": "Hidden advanced toggle, default off, for MVP (AnswerRequest.rerank defaults false). Surface only if power users ask."
+    }
+  ],
+  "stop_point": "User reviews grand blueprint",
+  "instruction_to_phase_5_and_b": "GRAND BLUEPRINT APPROVED. Architecture and design are reconciled with 0 open items. Phase B implementers MUST honor: (1) ExplainabilityPanel client-side TOC join (hld_v3.md §R1), (2) ConfidenceMeter max(confidence[]) reduction (design_spec_v2_notes.md), (3) ingest badge enum mapping (design_spec_v2_notes.md). Carry the 8 Phase-2 + 3 Phase-4 advisories to their target agents. No openapi.yaml or phase-3 design change is required to start implementation."
+}

@@ -1,0 +1,137 @@
+{
+  "$comment": "Phase 4 (TODO-05) Full-Stack Blueprint Reconciliation. Merges the 8 Phase-2 (TODO-03) joint-validation advisories with new Phase-4 architecture<->design reconciliation findings (GRC-*). CRITICAL reconciliation findings are fixed in-session and recorded with status=resolved_in_session (the binding data path is captured in hld_v3.md). MEDIUM/LOW items are carried to Phase B. Phase-2 advisories are carried forward verbatim (target agents unchanged).",
+  "generated": "2026-06-06",
+  "phase": "4",
+  "gate": "GRAND BLUEPRINT APPROVED",
+  "critical_open": 0,
+  "open_items": 0,
+  "advisory_count": 11,
+  "phase2_carried": 8,
+  "phase4_new": 3,
+  "advisories": [
+    {
+      "id": "ADV-001",
+      "severity": "MEDIUM",
+      "area": "traceability-accuracy",
+      "finding": "fr_api_traceability.json header scalars are internally inconsistent with the body. The header declares fr_mapped_to_api=19 and fr_non_api=10, but the mappings array contains 23 type=api and 6 type=non-api entries (=29 total), and non_api_summary.count=6. FR-to-operationId mapping is complete and correct (100% FR accountability holds); only the two summary scalars are stale.",
+      "resolution_or_recommendation": "First Phase B doc pass: set fr_mapped_to_api=23 and fr_non_api=6 in the header to match the mappings array. Do not change any mapping entry. No openapi.yaml change required.",
+      "target_phase_b_agent": "python-backend-engineer",
+      "source": "phase-2"
+    },
+    {
+      "id": "ADV-002",
+      "severity": "MEDIUM",
+      "area": "fault-tolerance",
+      "finding": "deleteDocument (DELETE /v1/documents/{id}) declares 202/401/403/404/429/500 but no 503. The erasure cascade (OAQ-2) tombstones the Postgres documents row synchronously before the async outbox sweep; a Postgres-down step would fail. error_catalog maps SERVICE_UNAVAILABLE to dependency-down but does not list deleteDocument.",
+      "resolution_or_recommendation": "Add a 503 ServiceUnavailable response to deleteDocument and append deleteDocument to SERVICE_UNAVAILABLE.operation_ids in error_catalog.json (retryable 503 + Retry-After rather than 500). Confirm the outbox sweep is idempotent on retry. Additive; erasure semantics unchanged.",
+      "target_phase_b_agent": "python-backend-engineer",
+      "source": "phase-2"
+    },
+    {
+      "id": "ADV-003",
+      "severity": "LOW",
+      "area": "rate-limiting",
+      "finding": "x-rate-limit coverage is partial. Present on routeQuery, answerQuery, ingestDocument; absent on listDocuments, getDocument, deleteDocument, getDocumentToc, exportDocumentData even though all declare a 429 RATE_LIMITED response. NFR-015 expects every authenticated operation to be rate-limited.",
+      "resolution_or_recommendation": "Add x-rate-limit blocks (or a documented default policy reference) to the five document-management/compliance operations. A shared default (e.g. per-credential 60/minute) for reads; tighten exportDocumentData and deleteDocument as sensitive ops.",
+      "target_phase_b_agent": "python-backend-engineer",
+      "source": "phase-2"
+    },
+    {
+      "id": "ADV-004",
+      "severity": "MEDIUM",
+      "area": "security-llm",
+      "finding": "Router prompt-injection mitigation (strict-JSON output schema, reject non-JSON, system/role separation) is specified in HLD §8 / NFR-008 but has no machine-checkable contract artifact. The OpenAPI surface does not (and should not) expose the internal router prompt, so Phase B has no enforceable test hook for OWASP-LLM01 beyond prose.",
+      "resolution_or_recommendation": "Phase B Router Node MUST validate the LLM response against the RouterOutput contract (HLD §7.1) and reject any non-conforming response with a deterministic fallback. Phase D MUST add a prompt-injection fixture set (malicious section titles/queries) to the router golden tests. Treat untrusted document text + query as the injection surface.",
+      "target_phase_b_agent": "ai-engineer",
+      "source": "phase-2"
+    },
+    {
+      "id": "ADV-005",
+      "severity": "LOW",
+      "area": "data-model-consistency",
+      "finding": "RouteResponse.estimated_token_reduction is a string with pattern ^[0-9]{1,3}%$ (e.g. '87%'). A string-encoded percentage is harder for enterprise integrators (Priya persona) to consume programmatically and cannot express fractional or >100% edge values cleanly.",
+      "resolution_or_recommendation": "Phase B may optionally add a numeric companion field (estimated_token_reduction_pct: number, 0-100) alongside the string for backward compatibility, or document the string as display-only. Non-blocking; revisit at FR-020 analytics dashboard.",
+      "target_phase_b_agent": "python-backend-engineer",
+      "source": "phase-2"
+    },
+    {
+      "id": "ADV-006",
+      "severity": "LOW",
+      "area": "requirements-clarity",
+      "finding": "FR-014 (multi-document routing) is exposed via optional RouteRequest.document_ids[] on the routing-only enterprise endpoint, but AnswerRequest (personal tool) accepts only a single document_id. The PRD lists FR-014 as Phase 2 and does not state whether multi-document answering is in scope for the personal tool.",
+      "resolution_or_recommendation": "Confirmed default (carried + re-affirmed in Phase 4): multi-document is routing-only (enterprise) for MVP; the personal-tool answer path is single-document (AnswerRequest.document_id). Phase 3 screen_inventory and Phase 4 reconciliation_matrix both reflect single-document Chat. If multi-document answering is desired later, AnswerRequest needs an additive document_ids[] extension (OAQ-4 merge layer).",
+      "target_phase_b_agent": "product-manager-agent",
+      "source": "phase-2"
+    },
+    {
+      "id": "AC-ADV-001",
+      "severity": "MEDIUM",
+      "area": "api-contract",
+      "finding": "RouteRequest uses a top-level oneOf (document_id | document_ids) and VALIDATION_ERROR anticipates 'both/neither'. document_id is not in required (only query is). Correct OpenAPI, but some codegen/validator toolchains handle top-level oneOf on a request body inconsistently, risking a 422-vs-400 divergence across SDKs (FR-021).",
+      "resolution_or_recommendation": "Phase B api-testing-engineer: add explicit contract tests asserting (a) document_id alone -> 200, (b) document_ids alone -> 200, (c) both -> 422 VALIDATION_ERROR, (d) neither -> 422 VALIDATION_ERROR. Pin validator behaviour so generated SDKs agree. No schema change required.",
+      "target_phase_b_agent": "api-testing-engineer",
+      "source": "phase-2"
+    },
+    {
+      "id": "AC-ADV-002",
+      "severity": "LOW",
+      "area": "api-contract",
+      "finding": "The SSE /v1/answer mid-stream error is delivered as event: error carrying a Problem payload, but a 200 status has already been sent (stream opened). Clients keying error handling on HTTP status (rather than SSE event name) could miss a mid-stream failure. Inherent to SSE; an integration footgun for the React client (ADR-9) and enterprise SDKs.",
+      "resolution_or_recommendation": "Phase B react-engineer + SDK docs: explicitly document and test the mid-stream error contract (event: error -> Problem) so the personal-tool client surfaces it (role=alert) and does not treat a 200-opened stream as guaranteed success. Phase 3 design already honours this (EmptyLoadingError ErrorState MidStream variant + Chat role=alert). Add a streaming-failure fixture to Phase D.",
+      "target_phase_b_agent": "react-engineer",
+      "source": "phase-2"
+    },
+    {
+      "id": "GRC-001",
+      "severity": "CRITICAL",
+      "area": "architecture-design-reconciliation",
+      "finding": "ExplainabilityPanel (component_library.md, FR-012) specifies a 'considered-sections list incl. rejected ones with scores' rendering section TITLES, but the answer-path routing object is RoutingSummary, whose sections[] is an array of bare SectionId strings (no title, no page range). The per-section confidence[] is a parallel index-aligned array but is not keyed to a title. The router's internal RouterOutput.relevant_sections[] (HLD §7.1) carries {section_id, title, page_start, page_end, confidence}, so the titled data exists upstream but is dropped in the SSE summary projection. As written, the UI binding is unsatisfiable - a real cross-domain data-path gap.",
+      "resolution_or_recommendation": "RESOLVED IN-SESSION (lower-risk Option A, no openapi.yaml change). RoutingSummary.sections[] and confidence[] are index-aligned; section_id is the universal join key. The SPA has already fetched TocResponse.toc[] for the open document, so the ExplainabilityPanel resolves each sections[i]'s human-readable title + page_start/page_end from the already-loaded TOC and pairs it with confidence[i]. rationale binds directly. This client-side join is recorded in hld_v3.md §R1 as the binding data path so Phase B does not invent a parallel titled array. A heavier additive variant (a titled object array on RoutingSummary) is deferred as a backward-compatible enhancement (see GRC-001-DEFER) and intentionally NOT applied here to keep the do-not-modify openapi.yaml intact.",
+      "target_phase_b_agent": "react-engineer",
+      "source": "phase-4",
+      "status": "resolved_in_session"
+    },
+    {
+      "id": "GRC-001-DEFER",
+      "severity": "LOW",
+      "area": "api-contract",
+      "finding": "Optional future enhancement linked to GRC-001: enriching RoutingSummary with a titled per-section object array would let the ExplainabilityPanel render without a client-side TOC join, useful if a section in routing.sections[] is ever not present in the loaded TOC (e.g. cross-document answer, currently out of MVP scope per ADV-006).",
+      "resolution_or_recommendation": "Deferred, additive-only. If/when multi-document answering ships, add an optional considered_sections: [{section_id, title, page_start, page_end, confidence, selected:bool}] array to RoutingSummary (backward compatible). Do NOT apply for MVP; the client-side TOC join (GRC-001) is sufficient and section_id always resolves within the single open document.",
+      "target_phase_b_agent": "python-backend-engineer",
+      "source": "phase-4"
+    },
+    {
+      "id": "GRC-002",
+      "severity": "MEDIUM",
+      "area": "architecture-design-reconciliation",
+      "finding": "ConfidenceMeter (FR-011) renders ONE level (HIGH/MED/LOW) and ONE numeric value with aria-valuenow={value}, but routing.confidence[] is an array (one score per selected section). The scalar reduction (which array element drives the meter) was unspecified - a design<->architecture binding gap.",
+      "resolution_or_recommendation": "RESOLVED IN-SESSION (Option B, design-side, no contract change). The displayed scalar is max(routing.confidence[]) - the routing decision's strongest signal - mapped to PRD 8.3 thresholds (>=0.70 HIGH, 0.50-0.69 MED, <0.50 LOW). When routing.fallback==true OR confidence[] is empty, the meter renders the Fallback variant. aria-valuenow=max(confidence[]), aria-valuemin=0, aria-valuemax=1. Recorded in design_spec_v2_notes.md.",
+      "target_phase_b_agent": "react-engineer",
+      "source": "phase-4",
+      "status": "resolved_in_session"
+    },
+    {
+      "id": "GRC-003",
+      "severity": "LOW",
+      "area": "architecture-design-reconciliation",
+      "finding": "UploadDropzone/DocumentCard ingest badge variants name 'Indexed / Pseudo(B) / FallbackOnly(C)', but the contract enum IngestResponse.ingest_status is [indexed, fallback_only, ephemeral] (no 'Pseudo(B)' value; Scenarios A and B are both 'indexed'). DocumentCard library badge source is Document.fallback_only (boolean), not the enum.",
+      "resolution_or_recommendation": "RESOLVED IN-SESSION (Option B, design-side, no contract change). Badge mapping: indexed->'Indexed', fallback_only->'Fallback-only', ephemeral->'Ephemeral'. The Scenario-B 'Pseudo' distinction is not contract-visible (B is 'indexed' with a pseudo-TOC) and is dropped from the user-facing badge. DocumentCard reads Document.fallback_only (true->'Fallback-only', false->'Indexed'). Recorded in design_spec_v2_notes.md.",
+      "target_phase_b_agent": "react-engineer",
+      "source": "phase-4",
+      "status": "resolved_in_session"
+    }
+  ],
+  "reconciliation_summary": {
+    "domains_reconciled": "BA + PM + SA + UI/UX",
+    "binding_check": "All 8 audited UI components (CitationCard, ConfidenceMeter, ExplainabilityPanel, ChatStream/SSE, TocSidebar, FallbackBanner, UploadDropzone, DocumentLibrary) bind to real openapi.yaml fields. See reconciliation_matrix.md.",
+    "conflicts_found": 3,
+    "conflicts_resolved_in_session": 3,
+    "critical_resolved_in_session": 1,
+    "openapi_changes": "none (do-not-modify honored)",
+    "hld_v3_written": true,
+    "design_spec_v2_notes_written": true,
+    "data_path_consistency": "SSE streaming (TokenEvent->AnswerFinalEvent), citation (AnswerFinalEvent.citations[]), confidence (routing.confidence[] reduced via GRC-002), and explainability (routing.rationale + sections[] x confidence[] joined to TOC via GRC-001) are consistent end-to-end. Fallback-mode UI (FallbackBanner / ConfidenceMeter Fallback) matches the router fallback contract: routing.fallback (query-time), TocResponse.fallback_only (structural), 503 SERVICE_UNAVAILABLE (degraded). section_id is the universal join key throughout; /v1/route is routing-only; /v1/answer is SSE.",
+    "hallucination_check": "0 fabricated API fields, 0 invented response shapes, 0 phantom FRs. Every component->field binding verified against openapi.yaml line-by-line.",
+    "context_faithfulness": "All resolutions honor the 10 ADRs and the team-alignment AGREED CONTRACTS (in-process async router, SSE generation, /v1/route routing-only, section_id universal key, RFC-7807 errors)."
+  }
+}
