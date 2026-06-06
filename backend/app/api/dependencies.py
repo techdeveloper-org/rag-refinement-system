@@ -67,6 +67,10 @@ def _ingestor_singleton() -> Ingestor:
     Returns:
         A live :class:`PipelineIngestor` composed with the production
         collaborators (PyMuPDF parser, OpenAI/BGE embedder, db + Qdrant stores).
+
+    Raises:
+        ProblemException: 503 when neither ``DATABASE_SYNC_URL`` nor
+            ``DATABASE_URL`` is configured.
     """
     from backend.app.adapters.ingestor import PipelineIngestor
     from backend.app.adapters.stores import QdrantVectorStore, SqlAlchemySectionStore
@@ -74,12 +78,14 @@ def _ingestor_singleton() -> Ingestor:
     from ingestion.parser import PyMuPDFParser
     from ingestion.pipeline import ingest_document
 
+    settings = get_settings()
+    sync_url = settings.database_sync_url or settings.database_url
+    if not sync_url:
+        raise service_unavailable("The ingestion section store is not configured.")
     return PipelineIngestor(
         parser=PyMuPDFParser(),
         embedder=FallbackEmbedder(OpenAIEmbedder(), BgeM3Embedder()),
-        section_store=SqlAlchemySectionStore.from_database_url(
-            get_settings().database_url or ""
-        ),
+        section_store=SqlAlchemySectionStore.from_database_url(sync_url),
         vector_store=QdrantVectorStore(),
         ingest=ingest_document,
     )

@@ -21,7 +21,12 @@ class Settings(BaseSettings):
     Attributes:
         app_name: Human-readable service name surfaced in probes and logs.
         app_version: Service version string reported by the liveness probe.
-        database_url: PostgreSQL DSN used by the readiness probe.
+        database_url: Async PostgreSQL DSN (``postgresql+asyncpg://``) used by
+            the async document store and readiness probe.
+        database_sync_url: Synchronous PostgreSQL DSN
+            (``postgresql+psycopg://``) used by the synchronous ingestion
+            section store. Defaults to ``database_url`` when unset, which is
+            safe if the URL already carries a sync driver scheme.
         qdrant_url: Qdrant base URL used by the readiness probe.
         readiness_timeout_seconds: Per-dependency probe timeout budget.
         max_upload_bytes: Maximum accepted upload body size in bytes; an upload
@@ -40,6 +45,7 @@ class Settings(BaseSettings):
     app_version: str = Field(default="0.1.0")
 
     database_url: str | None = Field(default=None, alias="DATABASE_URL")
+    database_sync_url: str | None = Field(default=None, alias="DATABASE_SYNC_URL")
     qdrant_url: str | None = Field(default=None, alias="QDRANT_URL")
 
     readiness_timeout_seconds: float = Field(

@@ -379,7 +379,11 @@ def ingest_document(
     toc = extract_toc(parsed, llm_refiner=llm_refiner)
     toc_dicts = _toc_to_dicts(toc.entries)
 
-    if toc.fallback_only:
+    fallback_only_flag = toc.fallback_only
+    section_rows_written = 0
+    chunks_upserted = 0
+
+    if fallback_only_flag:
         if not doc.no_retention:
             section_store.upsert_document(
                 doc_id=doc_id,
@@ -391,55 +395,38 @@ def ingest_document(
                 ingest_status="fallback_only",
                 fallback_only=True,
             )
-        return IngestResult(
+    elif not doc.no_retention:
+        section_store.upsert_document(
             doc_id=doc_id,
-            toc=toc_dicts,
-            section_rows_written=0,
-            chunks_upserted=0,
-            fallback_only=True,
-        ).as_dict()
-
-    if doc.no_retention:
-        return IngestResult(
-            doc_id=doc_id,
-            toc=toc_dicts,
-            section_rows_written=0,
-            chunks_upserted=0,
+            tenant_id=doc.tenant_id,
+            title=doc.title,
+            domain=doc.domain,
+            total_pages=parsed.page_count,
+            content_hash_value=hash_value,
+            ingest_status="indexed",
             fallback_only=False,
-        ).as_dict()
-
-    section_store.upsert_document(
-        doc_id=doc_id,
-        tenant_id=doc.tenant_id,
-        title=doc.title,
-        domain=doc.domain,
-        total_pages=parsed.page_count,
-        content_hash_value=hash_value,
-        ingest_status="indexed",
-        fallback_only=False,
-    )
-
-    pairs = _build_section_rows(doc_id, doc.tenant_id, toc.entries)
-    rows_written = section_store.replace_sections(doc_id, [row for row, _ in pairs])
-
-    sections = [(row.section_id, entry) for row, entry in pairs]
-    chunks = chunk_document(parsed, sections, doc_id, doc.tenant_id)
-
-    chunks_upserted = 0
-    if chunks:
-        vectors = _validate_embed_dimension(
-            embedder.embed([chunk.text for chunk in chunks])
         )
-        points = [
-            _chunk_point(chunk, vector)
-            for chunk, vector in zip(chunks, vectors, strict=True)
-        ]
-        chunks_upserted = vector_store.upsert_points(points)
+
+        pairs = _build_section_rows(doc_id, doc.tenant_id, toc.entries)
+        section_rows_written = section_store.replace_sections(doc_id, [row for row, _ in pairs])
+
+        sections = [(row.section_id, entry) for row, entry in pairs]
+        chunks = chunk_document(parsed, sections, doc_id, doc.tenant_id)
+
+        if chunks:
+            vectors = _validate_embed_dimension(
+                embedder.embed([chunk.text for chunk in chunks])
+            )
+            points = [
+                _chunk_point(chunk, vector)
+                for chunk, vector in zip(chunks, vectors, strict=True)
+            ]
+            chunks_upserted = vector_store.upsert_points(points)
 
     return IngestResult(
         doc_id=doc_id,
         toc=toc_dicts,
-        section_rows_written=rows_written,
+        section_rows_written=section_rows_written,
         chunks_upserted=chunks_upserted,
-        fallback_only=False,
+        fallback_only=fallback_only_flag,
     ).as_dict()

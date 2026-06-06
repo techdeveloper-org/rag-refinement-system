@@ -19,6 +19,7 @@ The router never invokes the generation LLM.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from typing import Any
 
@@ -166,7 +167,9 @@ def _routed_sections_from_output(
         record = toc_by_id.get(str(section_id))
         if record is None:
             continue
-        confidence = float(confidences[index]) if index < len(confidences) else 0.0
+        if index >= len(confidences):
+            continue
+        confidence = float(confidences[index])
         routed.append(
             RoutedSection(
                 section_id=record.section_id,
@@ -268,13 +271,18 @@ class RouterModuleAdapter:
         Returns:
             A :class:`RouterDecision` with the merged routed sections.
         """
+        results = await asyncio.gather(
+            *[
+                self._route_one(
+                    tenant_id, doc_id, query, confidence_threshold, max_sections
+                )
+                for doc_id in document_ids
+            ]
+        )
         all_sections: list[RoutedSection] = []
         total_time_ms = 0
         rationales: list[str] = []
-        for doc_id in document_ids:
-            routed, output = await self._route_one(
-                tenant_id, doc_id, query, confidence_threshold, max_sections
-            )
+        for routed, output in results:
             all_sections.extend(routed)
             total_time_ms += int(output.get("routing_time_ms") or 0)
             rationale = output.get("rationale")

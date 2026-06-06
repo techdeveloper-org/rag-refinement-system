@@ -186,9 +186,6 @@ class SqlAlchemyDocumentStore:
         Raises:
             DependencyUnavailable: When the structure store is unreachable.
         """
-        owns = await self.get_document(tenant_id, doc_id)
-        if owns is None:
-            return []
         stmt = (
             select(Section)
             .where(Section.doc_id == doc_id, Section.tenant_id == tenant_id)

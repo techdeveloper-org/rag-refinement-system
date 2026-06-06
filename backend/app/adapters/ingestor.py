@@ -27,7 +27,7 @@ from typing import Any
 
 import anyio
 
-from backend.app.api.interfaces import IngestOutcome, SectionRecord
+from backend.app.api.interfaces import DependencyUnavailable, IngestOutcome, SectionRecord
 from ingestion import section_id_for
 from ingestion.parser import Parser, content_hash
 from ingestion.pipeline import (
@@ -199,7 +199,12 @@ class PipelineIngestor:
             domain=domain,
             no_retention=no_retention,
         )
-        result, deduplicated = await anyio.to_thread.run_sync(self._run_pipeline, doc)
+        try:
+            result, deduplicated = await anyio.to_thread.run_sync(self._run_pipeline, doc)
+        except DependencyUnavailable:
+            raise
+        except Exception as exc:
+            raise DependencyUnavailable(f"Ingestion pipeline failed: {exc}") from exc
 
         toc = list(result.get("toc") or [])
         doc_id = str(result["doc_id"])

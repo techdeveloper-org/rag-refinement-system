@@ -375,9 +375,14 @@ class RouterGraph:
         }
         if self._app is not None:
             final: RouterState = await self._app.ainvoke(initial)  # type: ignore[attr-defined]
+            output = final.get("output")
+            if output is None:
+                final = await _run_pipeline_fallback(initial, self._llm)
+                output = final["output"]
         else:
             final = await _run_pipeline_fallback(initial, self._llm)
-        return final["output"]
+            output = final["output"]
+        return output
 
 
 ROUTER_BACKEND = "langgraph"

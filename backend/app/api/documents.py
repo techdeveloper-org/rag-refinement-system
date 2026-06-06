@@ -262,6 +262,11 @@ async def list_documents(
         principal.tenant_id, page, page_size, domain
     )
     total_pages = math.ceil(total_count / page_size) if page_size else 0
+    if total_count > 0 and page > total_pages:
+        raise validation_error(
+            detail="Requested page exceeds total pages.",
+            errors=[{"field": "page", "message": f"must be <= {total_pages}"}],
+        )
     return DocumentListResponse(
         data=[_to_document_schema(record) for record in records],
         pagination=Pagination(
