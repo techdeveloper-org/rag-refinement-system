@@ -1,0 +1,406 @@
+"""Ingestion pipeline orchestration (STORY-003/008/009/011).
+
+Implements the data-engineer-owned ``ingest_document`` entry point that backend
+calls: parse -> TOC -> section-aware chunk -> embed -> upsert, writing section
+rows to Postgres (via ``db.models``) and chunk points to Qdrant (payload
+``{chunk_id, section_id, doc_id, tenant_id, page}``, AGREED CONTRACT).
+
+Invariants enforced here:
+    * Idempotent on content hash - a re-upload of identical bytes reuses the same
+      ``doc_id`` and produces the same deterministic chunk point ids, so no
+      duplicate points are created (OAQ-1, STORY-003).
+    * No chunk crosses a section boundary - delegated to and asserted by
+      ``chunker.chunk_document`` (STORY-011 P0 invariant).
+    * Scenario C documents are returned ``fallback_only=True`` and persist no
+      sections (whole-document RAG path).
+    * ``no_retention`` purges raw bytes and skips persistence so nothing is
+      retained (DPDP no-retention mode).
+
+The Postgres section store and the Qdrant vector store are accessed through the
+``SectionStore`` and ``VectorStore`` Protocols so tests inject in-memory fakes
+with no network, no real key, and no live database.
+"""
+
+from __future__ import annotations
+
+import uuid
+from dataclasses import dataclass, field
+from typing import Any, Protocol, runtime_checkable
+
+from ingestion.chunker import Chunk, chunk_document
+from ingestion.embedder import Embedder
+from ingestion.parser import Parser, content_hash
+from ingestion.toc_extractor import LlmRefiner, TocEntry, extract_toc
+
+_DOC_ID_NAMESPACE = uuid.UUID("6ba7b811-9dad-11d1-80b4-00c04fd430c8")
+"""Stable namespace so a content hash maps to a deterministic doc_id (idempotency)."""
+
+
+@dataclass(frozen=True)
+class IngestInput:
+    """Input to ``ingest_document``.
+
+    Attributes:
+        data: Raw PDF bytes (runtime data, never prompt context).
+        tenant_id: Owning tenant; stamped on the document, sections, and every
+            chunk payload (mandatory IDOR isolation key).
+        title: Optional document title (structural metadata).
+        domain: Optional domain tag.
+        no_retention: When True, no raw bytes are retained and no rows/points are
+            persisted (DPDP no-retention mode); the toc is still returned.
+    """
+
+    data: bytes
+    tenant_id: str
+    title: str | None = None
+    domain: str | None = None
+    no_retention: bool = False
+
+
+@dataclass
+class SectionRow:
+    """A section row to persist in Postgres (mirrors ``db.models.Section``).
+
+    Attributes:
+        section_id: Universal key (deterministic from doc + ordinal).
+        doc_id: Owning document id.
+        tenant_id: Owning tenant id (IDOR guard).
+        title: Section title.
+        level: Hierarchy level.
+        page_start: Inclusive first page.
+        page_end: Inclusive last page.
+    """
+
+    section_id: str
+    doc_id: str
+    tenant_id: str
+    title: str
+    level: int
+    page_start: int
+    page_end: int
+
+
+@runtime_checkable
+class SectionStore(Protocol):
+    """Postgres-facing port for documents + sections (idempotent on hash).
+
+    A fake implementing this Protocol lets the pipeline be tested without a live
+    database. Production wiring is a thin SQLAlchemy adapter over ``db.models``.
+    """
+
+    def find_doc_id_by_hash(self, tenant_id: str, content_hash_value: str) -> str | None:
+        """Return an existing ``doc_id`` for this tenant + content hash, or None.
+
+        Args:
+            tenant_id: Owning tenant.
+            content_hash_value: SHA-256 content hash of the upload.
+
+        Returns:
+            The existing document id for an identical prior upload, else None.
+        """
+        ...
+
+    def upsert_document(
+        self,
+        doc_id: str,
+        tenant_id: str,
+        title: str | None,
+        domain: str | None,
+        total_pages: int,
+        content_hash_value: str | None,
+        ingest_status: str,
+        fallback_only: bool,
+    ) -> None:
+        """Create or update the document row (tenant-scoped).
+
+        Args:
+            doc_id: Document primary key.
+            tenant_id: Owning tenant.
+            title: Optional title.
+            domain: Optional domain.
+            total_pages: Page count.
+            content_hash_value: Content hash (None in no-retention mode).
+            ingest_status: One of ``db.models.INGEST_STATUS_VALUES``.
+            fallback_only: True when no structure was detected (Scenario C).
+        """
+        ...
+
+    def replace_sections(self, doc_id: str, rows: list[SectionRow]) -> int:
+        """Replace all sections for ``doc_id`` with ``rows`` (idempotent).
+
+        Args:
+            doc_id: Document whose sections are replaced.
+            rows: New section rows.
+
+        Returns:
+            The number of section rows written.
+        """
+        ...
+
+
+@runtime_checkable
+class VectorStore(Protocol):
+    """Qdrant-facing port for idempotent chunk-point upsert.
+
+    A fake implementing this Protocol lets the pipeline be tested without a live
+    Qdrant. Production wiring upserts ``PointStruct`` records keyed by the
+    deterministic chunk point id.
+    """
+
+    def upsert_points(self, points: list[dict[str, Any]]) -> int:
+        """Upsert chunk points (deterministic ids make this idempotent).
+
+        Args:
+            points: Each a dict with ``id``, ``vector`` and ``payload`` keys; the
+                payload is exactly ``{chunk_id, section_id, doc_id, tenant_id, page}``.
+
+        Returns:
+            The number of points upserted.
+        """
+        ...
+
+
+@dataclass
+class IngestResult:
+    """Return shape of ``ingest_document`` (interface contract).
+
+    Attributes:
+        doc_id: Document id (reused on idempotent re-upload).
+        toc: Resolved TOC entries serialized as ``{level, title, page_start,
+            page_end}`` dicts.
+        section_rows_written: Number of section rows persisted (0 in fallback /
+            no-retention).
+        chunks_upserted: Number of chunk points upserted (0 in fallback /
+            no-retention).
+        fallback_only: True for Scenario C (whole-document RAG path).
+    """
+
+    doc_id: str
+    toc: list[dict[str, Any]] = field(default_factory=list)
+    section_rows_written: int = 0
+    chunks_upserted: int = 0
+    fallback_only: bool = False
+
+    def as_dict(self) -> dict[str, Any]:
+        """Return the result as the plain dict the contract specifies.
+
+        Returns:
+            ``{doc_id, toc, section_rows_written, chunks_upserted, fallback_only}``.
+        """
+        return {
+            "doc_id": self.doc_id,
+            "toc": self.toc,
+            "section_rows_written": self.section_rows_written,
+            "chunks_upserted": self.chunks_upserted,
+            "fallback_only": self.fallback_only,
+        }
+
+
+def _deterministic_doc_id(tenant_id: str, content_hash_value: str) -> str:
+    """Derive a stable ``doc_id`` from tenant + content hash.
+
+    Ensures a re-upload of identical content for the same tenant maps to the same
+    document id even before the store dedup lookup (defense in depth, OAQ-1).
+
+    Args:
+        tenant_id: Owning tenant.
+        content_hash_value: SHA-256 content hash.
+
+    Returns:
+        A deterministic UUID5 string used as ``doc_id``.
+    """
+    return str(uuid.uuid5(_DOC_ID_NAMESPACE, f"{tenant_id}:{content_hash_value}"))
+
+
+def _section_id(doc_id: str, ordinal: int) -> str:
+    """Derive a stable ``section_id`` for the nth section of a document.
+
+    Args:
+        doc_id: Owning document id.
+        ordinal: Zero-based section ordinal.
+
+    Returns:
+        A deterministic UUID5 string used as ``section_id``.
+    """
+    return str(uuid.uuid5(_DOC_ID_NAMESPACE, f"{doc_id}:section:{ordinal}"))
+
+
+def _toc_to_dicts(entries: tuple[TocEntry, ...]) -> list[dict[str, Any]]:
+    """Serialize TOC entries to the contract's dict shape.
+
+    Args:
+        entries: Resolved TOC entries.
+
+    Returns:
+        ``{level, title, page_start, page_end}`` dicts in order.
+    """
+    return [
+        {
+            "level": entry.level,
+            "title": entry.title,
+            "page_start": entry.page_start,
+            "page_end": entry.page_end,
+        }
+        for entry in entries
+    ]
+
+
+def _build_section_rows(
+    doc_id: str, tenant_id: str, entries: tuple[TocEntry, ...]
+) -> list[tuple[SectionRow, TocEntry]]:
+    """Pair each TOC entry with its persistable section row.
+
+    Args:
+        doc_id: Owning document id.
+        tenant_id: Owning tenant id.
+        entries: Resolved TOC entries.
+
+    Returns:
+        ``(SectionRow, TocEntry)`` pairs sharing a deterministic ``section_id``.
+    """
+    pairs: list[tuple[SectionRow, TocEntry]] = []
+    for ordinal, entry in enumerate(entries):
+        section_id = _section_id(doc_id, ordinal)
+        row = SectionRow(
+            section_id=section_id,
+            doc_id=doc_id,
+            tenant_id=tenant_id,
+            title=entry.title,
+            level=entry.level,
+            page_start=entry.page_start,
+            page_end=entry.page_end,
+        )
+        pairs.append((row, entry))
+    return pairs
+
+
+def _chunk_point(chunk: Chunk, vector: list[float]) -> dict[str, Any]:
+    """Build a Qdrant point dict from a chunk and its embedding.
+
+    The point id is the deterministic ``chunk_id`` so re-upsert is idempotent;
+    the payload is exactly the AGREED CONTRACT shape including ``tenant_id``.
+
+    Args:
+        chunk: The section-bounded chunk.
+        vector: Its embedding vector.
+
+    Returns:
+        A point dict ``{id, vector, payload}``.
+    """
+    return {
+        "id": chunk.chunk_id,
+        "vector": vector,
+        "payload": {
+            "chunk_id": chunk.chunk_id,
+            "section_id": chunk.section_id,
+            "doc_id": chunk.doc_id,
+            "tenant_id": chunk.tenant_id,
+            "page": chunk.page,
+        },
+    }
+
+
+def ingest_document(
+    doc: IngestInput,
+    *,
+    parser: Parser,
+    embedder: Embedder,
+    section_store: SectionStore,
+    vector_store: VectorStore,
+    llm_refiner: LlmRefiner | None = None,
+) -> dict[str, Any]:
+    """Ingest a document end-to-end and return the contract result dict.
+
+    Pipeline: hash + dedup -> parse -> TOC (Scenario A/B/C) -> on A/B persist
+    sections + section-aware chunk + embed + upsert; on C return
+    ``fallback_only=True`` with no persistence. ``no_retention`` skips all
+    persistence and retains no bytes while still returning the resolved TOC.
+
+    Args:
+        doc: The upload (bytes, tenant, metadata, retention flag).
+        parser: Injected PDF parser (Protocol).
+        embedder: Injected embedding adapter (Protocol; 1536-dim).
+        section_store: Injected Postgres-facing section store (Protocol).
+        vector_store: Injected Qdrant-facing vector store (Protocol).
+        llm_refiner: Optional Scenario-B header refiner hook.
+
+    Returns:
+        ``{doc_id, toc, section_rows_written, chunks_upserted, fallback_only}``.
+
+    Raises:
+        ValueError: When ``tenant_id`` is empty (mandatory IDOR key).
+        AssertionError: If chunking produces a cross-section chunk (STORY-011).
+    """
+    if not doc.tenant_id:
+        raise ValueError("tenant_id is mandatory (IDOR isolation key).")
+
+    hash_value = content_hash(doc.data)
+    existing = section_store.find_doc_id_by_hash(doc.tenant_id, hash_value)
+    doc_id = existing or _deterministic_doc_id(doc.tenant_id, hash_value)
+
+    parsed = parser.parse(doc.data)
+    toc = extract_toc(parsed, llm_refiner=llm_refiner)
+    toc_dicts = _toc_to_dicts(toc.entries)
+
+    if toc.fallback_only:
+        if not doc.no_retention:
+            section_store.upsert_document(
+                doc_id=doc_id,
+                tenant_id=doc.tenant_id,
+                title=doc.title,
+                domain=doc.domain,
+                total_pages=parsed.page_count,
+                content_hash_value=hash_value,
+                ingest_status="fallback_only",
+                fallback_only=True,
+            )
+        return IngestResult(
+            doc_id=doc_id,
+            toc=toc_dicts,
+            section_rows_written=0,
+            chunks_upserted=0,
+            fallback_only=True,
+        ).as_dict()
+
+    if doc.no_retention:
+        return IngestResult(
+            doc_id=doc_id,
+            toc=toc_dicts,
+            section_rows_written=0,
+            chunks_upserted=0,
+            fallback_only=False,
+        ).as_dict()
+
+    section_store.upsert_document(
+        doc_id=doc_id,
+        tenant_id=doc.tenant_id,
+        title=doc.title,
+        domain=doc.domain,
+        total_pages=parsed.page_count,
+        content_hash_value=hash_value,
+        ingest_status="indexed",
+        fallback_only=False,
+    )
+
+    pairs = _build_section_rows(doc_id, doc.tenant_id, toc.entries)
+    rows_written = section_store.replace_sections(doc_id, [row for row, _ in pairs])
+
+    sections = [(row.section_id, entry) for row, entry in pairs]
+    chunks = chunk_document(parsed, sections, doc_id, doc.tenant_id)
+
+    chunks_upserted = 0
+    if chunks:
+        vectors = embedder.embed([chunk.text for chunk in chunks])
+        points = [
+            _chunk_point(chunk, vector)
+            for chunk, vector in zip(chunks, vectors, strict=True)
+        ]
+        chunks_upserted = vector_store.upsert_points(points)
+
+    return IngestResult(
+        doc_id=doc_id,
+        toc=toc_dicts,
+        section_rows_written=rows_written,
+        chunks_upserted=chunks_upserted,
+        fallback_only=False,
+    ).as_dict()
