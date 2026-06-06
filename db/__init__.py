@@ -8,12 +8,12 @@ join/filter key across both stores; chunk vectors live only in Qdrant.
 from __future__ import annotations
 
 from db.models import (
+    INGEST_STATUS_VALUES,
+    RESIDENCY_REGION_VALUES,
     Base,
     Document,
     ErasureOutbox,
     Section,
-    INGEST_STATUS_VALUES,
-    RESIDENCY_REGION_VALUES,
 )
 from db.qdrant_bootstrap import (
     COLLECTION_NAME,

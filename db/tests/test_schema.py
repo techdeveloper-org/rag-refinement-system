@@ -20,11 +20,11 @@ import re
 import pytest
 
 from db.models import (
+    INGEST_STATUS_VALUES,
     Base,
     Document,
     ErasureOutbox,
     Section,
-    INGEST_STATUS_VALUES,
 )
 
 _MIGRATIONS_DIR = pathlib.Path(__file__).resolve().parents[2] / "migrations"

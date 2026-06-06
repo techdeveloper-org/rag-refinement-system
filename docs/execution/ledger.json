@@ -387,7 +387,7 @@
       "depends_on": [
         "TODO-10"
       ],
-      "status": "pending",
+      "status": "done",
       "agents": [
         "data-engineer",
         "ai-engineer",
@@ -402,7 +402,12 @@
       "gate": "unit tests pass per component",
       "stop_point": null,
       "context_file": "todos/todo-11-phaseb2-ingestion-router-api.md",
-      "completed_artifacts": []
+      "completed_artifacts": [
+        "ingestion/",
+        "router/",
+        "backend/app/api/",
+        "backend/app/security/"
+      ]
     },
     {
       "id": "TODO-12",

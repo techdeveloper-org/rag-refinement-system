@@ -108,7 +108,7 @@ class Document(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
-    sections: Mapped[list["Section"]] = relationship(
+    sections: Mapped[list[Section]] = relationship(
         back_populates="document",
         cascade="all, delete-orphan",
         passive_deletes=True,
@@ -159,7 +159,7 @@ class Section(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
-    document: Mapped["Document"] = relationship(back_populates="sections")
+    document: Mapped[Document] = relationship(back_populates="sections")
 
     __table_args__ = (
         CheckConstraint("level >= 1", name="sections_level_positive"),

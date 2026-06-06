@@ -19,11 +19,14 @@ CONTRACT); no credentials are hardcoded. No PII values are handled here.
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 
 from qdrant_client import QdrantClient
 from qdrant_client import models as qm
+
+logger = logging.getLogger(__name__)
 
 COLLECTION_NAME: str = "rag_chunks"
 """Name of the Qdrant collection holding Level-3 chunk vectors."""
@@ -114,9 +117,12 @@ def ensure_payload_indexes(
                 field_name=field,
                 field_schema=qm.PayloadSchemaType.KEYWORD,
             )
-        except Exception:
-            # An index already exists for this field; ensuring is idempotent.
-            continue
+        except Exception as exc:
+            logger.debug(
+                "payload index for %r already present (idempotent ensure): %s",
+                field,
+                exc,
+            )
     return PAYLOAD_INDEX_FIELDS
 
 
