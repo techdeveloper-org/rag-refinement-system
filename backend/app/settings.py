@@ -43,6 +43,20 @@ class Settings(BaseSettings):
         default=2.0, alias="READINESS_TIMEOUT_SECONDS"
     )
 
+    jwt_secret: str | None = Field(default=None, alias="JWT_SECRET")
+    jwt_algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
+    jwt_audience: str = Field(default="rag-refinement-personal", alias="JWT_AUDIENCE")
+    jwt_issuer: str | None = Field(default=None, alias="JWT_ISSUER")
+
+    api_key_salt: str | None = Field(default=None, alias="API_KEY_SALT")
+
+    rate_limit_default_per_minute: int = Field(
+        default=60, alias="RATE_LIMIT_DEFAULT_PER_MINUTE"
+    )
+    rate_limit_sensitive_per_minute: int = Field(
+        default=20, alias="RATE_LIMIT_SENSITIVE_PER_MINUTE"
+    )
+
 
 @lru_cache
 def get_settings() -> Settings:
