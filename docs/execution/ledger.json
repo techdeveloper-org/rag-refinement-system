@@ -246,7 +246,8 @@
       "depends_on": [
         "TODO-06"
       ],
-      "status": "in_progress",
+      "status": "done",
+      "status_note": "SPRINT READY (consensus APPROVED, 0 open items). 8 epics, 38 stories, 100% FR->story coverage. Sprint 1 = 11 stories, 39 SP committed vs 39.9 SP ceiling (42 SP capacity, 92.9% util). DoD AHP CR=0.00763 (<0.10). DPDP x-pii (FR-029) auto-created into Sprint 1; CERT-In full hook deferred to Sprint 2 with substrate in Sprint 1. NO GitHub calls - github_issues_manifest.json (11 issues + label taxonomy + Sprint 1 milestone) is LOCAL/ready-to-create only. Awaiting user review of sprint board at STOP point.",
       "agents": [
         "scrum-master-agent",
         "agile-tooling-specialist",
@@ -263,7 +264,14 @@
       "gate": "SPRINT READY; 100% FR->story",
       "stop_point": "User reviews sprint board",
       "context_file": "todos/todo-07-phase6-sprint-planning-github.md",
-      "completed_artifacts": []
+      "completed_artifacts": [
+        "docs/phase-6-sprint-planning/backlog.md",
+        "docs/phase-6-sprint-planning/sprint_1_backlog.md",
+        "docs/phase-6-sprint-planning/github_issues_manifest.json",
+        "docs/phase-6-sprint-planning/fr_story_traceability.json",
+        "docs/phase-6-sprint-planning/sprint_agent_briefs.json",
+        "docs/phase-6-sprint-planning/sprint_verdict.json"
+      ]
     },
     {
       "id": "TODO-08",
@@ -273,7 +281,7 @@
       "depends_on": [
         "TODO-07"
       ],
-      "status": "pending",
+      "status": "in_progress",
       "agents": [
         "orchestrator-agent",
         "agile-business-mathematics-expert",

@@ -1,0 +1,150 @@
+{
+  "$comment": "Phase 6 (TODO-07) Sprint-1 agent briefs. Maps each committed Sprint-1 story to the implementing agent(s) per the AGREED CONTRACTS roster, with the context sources and gate each agent must honor. Feeds Phase 7 agent-task routing (TODO-08). No GitHub calls. Source: sprint_1_backlog.md, AGREED CONTRACTS in _common_context.md.",
+  "generated": "2026-06-06",
+  "phase": "6",
+  "sprint": "Sprint 1",
+  "sprint_goal": "Stand up a deployable, authenticated, tenant-isolated ingestion-and-routing thin slice (upload -> TOC -> chunk -> embed -> store -> route) on CI-gated, health-checked services with DPDP x-pii data-access in place from day one.",
+  "context_budget_note": "Every Phase B+ agent prompt MUST carry 'Context Budget: {N} tokens | Sources: [...]' (ENFORCEMENT RULES). Budgets are assigned at Phase 7 routing; this brief lists the Sources each story requires.",
+  "briefs": [
+    {
+      "story_id": "STORY-001",
+      "title": "PostgreSQL structure schema + migrations",
+      "lead_agent": "database-engineer",
+      "supporting_agents": [],
+      "epic": "EPIC-STO",
+      "story_points": 3,
+      "fr_refs": ["FR-003", "FR-024"],
+      "sources": ["hld.md (4.1, 4.2)", "SRS.md (AC-003, AC-024)", "AGREED CONTRACT: python-backend <-> database-engineer schema"],
+      "gate": "unit tests pass; migrations forward+rollback; tenant_id on every row",
+      "risk_tier": "foundation"
+    },
+    {
+      "story_id": "STORY-038",
+      "title": "Auth: API keys + OAuth2/JWT + tenant substrate",
+      "lead_agent": "python-backend-engineer",
+      "supporting_agents": ["auth-security-specialist"],
+      "epic": "EPIC-SEC",
+      "story_points": 5,
+      "fr_refs": ["NFR-015"],
+      "sources": ["hld.md (ADR-7)", "openapi.yaml (securitySchemes)", "AGREED CONTRACT: api-security/auth <-> backend"],
+      "gate": "unit tests pass; API-key rotation + JWT validation; rate-limit on auth ops (ADV-003)",
+      "risk_tier": "foundation/security"
+    },
+    {
+      "story_id": "STORY-002",
+      "title": "Qdrant collection + payload schema",
+      "lead_agent": "database-engineer",
+      "supporting_agents": ["data-engineer"],
+      "epic": "EPIC-STO",
+      "story_points": 3,
+      "fr_refs": ["FR-004"],
+      "sources": ["hld.md (4.3, ADR-2)", "SRS.md (AC-004)", "AGREED CONTRACT: backend <-> database-engineer payload filter"],
+      "gate": "unit tests pass; payload index on section_id + tenant_id",
+      "risk_tier": "foundation"
+    },
+    {
+      "story_id": "STORY-004",
+      "title": "Service skeleton: Docker + /health + /ready",
+      "lead_agent": "devops-engineer",
+      "supporting_agents": [],
+      "epic": "EPIC-OPS",
+      "story_points": 2,
+      "fr_refs": ["NFR-009"],
+      "sources": ["hld.md (9)", "openapi.yaml (getHealth, getReadiness)", "AGREED CONTRACT: devops <-> all implementers"],
+      "gate": "unit tests pass; /ready returns 503 on dependency-down",
+      "risk_tier": "foundation"
+    },
+    {
+      "story_id": "STORY-005",
+      "title": "CI: lint + type + unit + SAST + secrets scan",
+      "lead_agent": "devops-engineer",
+      "supporting_agents": ["sast-engineer", "secrets-detection-specialist"],
+      "epic": "EPIC-OPS",
+      "story_points": 2,
+      "fr_refs": ["NFR-007", "NFR-010"],
+      "sources": ["AGREED CONTRACT: sast/secrets <-> devops", "SRS.md (NFR-007, NFR-010)"],
+      "gate": "CI blocks on hardcoded key; Python+TS stacks configured",
+      "risk_tier": "foundation/security"
+    },
+    {
+      "story_id": "STORY-008",
+      "title": "PDF upload + extraction (POST /v1/documents)",
+      "lead_agent": "python-backend-engineer",
+      "supporting_agents": ["data-engineer"],
+      "epic": "EPIC-ING",
+      "story_points": 3,
+      "fr_refs": ["FR-001"],
+      "sources": ["hld.md (3.1)", "openapi.yaml (ingestDocument)", "SRS.md (AC-001)", "AGREED CONTRACT: backend <-> data-engineer ingest handoff"],
+      "gate": "unit tests pass; idempotent on content hash; IngestResponse shape",
+      "risk_tier": "core"
+    },
+    {
+      "story_id": "STORY-009",
+      "title": "Native TOC extraction (Scenario A)",
+      "lead_agent": "data-engineer",
+      "supporting_agents": [],
+      "epic": "EPIC-ING",
+      "story_points": 3,
+      "fr_refs": ["FR-002"],
+      "sources": ["hld.md (3.1, ADR-4)", "SRS.md (AC-002)"],
+      "gate": "unit tests pass; level/title/page-range from get_toc()",
+      "risk_tier": "core"
+    },
+    {
+      "story_id": "STORY-003",
+      "title": "Embedding + idempotent upsert pipeline",
+      "lead_agent": "data-engineer",
+      "supporting_agents": [],
+      "epic": "EPIC-STO",
+      "story_points": 5,
+      "fr_refs": ["FR-004"],
+      "sources": ["hld.md (4.3, ADR-6)", "SRS.md (AC-004, AC-001)", "AGREED CONTRACT: data-engineer owns embed+upsert"],
+      "gate": "unit tests pass; idempotent on content hash; key via env only",
+      "risk_tier": "core"
+    },
+    {
+      "story_id": "STORY-011",
+      "title": "Section-aware 3-level chunking",
+      "lead_agent": "data-engineer",
+      "supporting_agents": [],
+      "epic": "EPIC-ING",
+      "story_points": 5,
+      "fr_refs": ["FR-003"],
+      "sources": ["hld.md (4.1)", "SRS.md (AC-003)", "AGREED CONTRACT: no chunk crosses a section boundary"],
+      "gate": "unit tests pass; deterministic golden fixtures (P0-risk)",
+      "risk_tier": "P0-risk"
+    },
+    {
+      "story_id": "STORY-014",
+      "title": "LangGraph router node (Claude 3 Haiku)",
+      "lead_agent": "ai-engineer",
+      "supporting_agents": ["prompt-generation-expert", "threat-modeling-specialist"],
+      "epic": "EPIC-RTR",
+      "story_points": 5,
+      "fr_refs": ["FR-005", "NFR-008"],
+      "sources": ["hld.md (3.2, 7.1, ADR-1/ADR-3)", "SRS.md (AC-005)", "grand_advisory_items.json (ADV-004)", "AGREED CONTRACT: threat-modeling <-> ai-engineer OWASP-LLM"],
+      "gate": "unit tests pass; golden TOC fixtures; RouterOutput contract validation + deterministic fallback (P0-risk); routing_time_ms in [100,300]",
+      "risk_tier": "P0-risk"
+    },
+    {
+      "story_id": "STORY-034",
+      "title": "DPDP access + x-pii inventory (FR-029)",
+      "lead_agent": "python-backend-engineer",
+      "supporting_agents": ["security-compliance-mapper"],
+      "epic": "EPIC-SEC",
+      "story_points": 3,
+      "fr_refs": ["FR-026", "FR-029"],
+      "sources": ["hld.md (7.4, 4.2)", "openapi.yaml (exportDocumentData, x-pii)", "SRS.md (AC-026, AC-029)", "AGREED CONTRACT: security-compliance-mapper <-> SA DPDP"],
+      "gate": "unit tests pass; DataAccessExport.pii_fields[] enumerates x-pii fields",
+      "risk_tier": "security/compliance"
+    }
+  ],
+  "agent_load": {
+    "database-engineer": ["STORY-001", "STORY-002"],
+    "python-backend-engineer": ["STORY-038", "STORY-008", "STORY-034"],
+    "data-engineer": ["STORY-009", "STORY-003", "STORY-011"],
+    "devops-engineer": ["STORY-004", "STORY-005"],
+    "ai-engineer": ["STORY-014"]
+  },
+  "github_calls_made": false
+}
