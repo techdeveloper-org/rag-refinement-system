@@ -417,7 +417,7 @@
       "depends_on": [
         "TODO-11"
       ],
-      "status": "pending",
+      "status": "done",
       "agents": [
         "react-engineer",
         "ui-ux-designer"
@@ -428,7 +428,9 @@
       "gate": "unit tests pass; UI renders citations + confidence + explainability",
       "stop_point": null,
       "context_file": "todos/todo-12-phaseb3-frontend-personal-tool.md",
-      "completed_artifacts": []
+      "completed_artifacts": [
+        "frontend/ (Vite React TS SPA, 48 vitest tests)"
+      ]
     },
     {
       "id": "TODO-13",
