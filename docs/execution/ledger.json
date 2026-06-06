@@ -36,7 +36,7 @@
       "phase": "0",
       "parallel_group": "P0",
       "depends_on": [],
-      "status": "awaiting_user",
+      "status": "done",
       "agents": [
         "business-analyst-agent",
         "product-manager-agent",
@@ -89,7 +89,7 @@
       "depends_on": [
         "TODO-01"
       ],
-      "status": "in_progress",
+      "status": "done",
       "agents": [
         "solution-architect",
         "python-backend-engineer",
@@ -105,7 +105,12 @@
       "gate": "API CONTRACT APPROVED; 100% FR->operationId; DPDP x-pii/erasure",
       "stop_point": "User reviews openapi.yaml",
       "context_file": "todos/todo-02-phase1.5-api-contract-openapi.md",
-      "completed_artifacts": []
+      "completed_artifacts": [
+        "docs/phase-1-api-contracts/openapi.yaml",
+        "docs/phase-1-api-contracts/fr_api_traceability.json",
+        "docs/phase-1-api-contracts/error_catalog.json",
+        "docs/phase-1-api-contracts/api_contract_verdict.json"
+      ]
     },
     {
       "id": "TODO-03",
@@ -115,7 +120,7 @@
       "depends_on": [
         "TODO-02"
       ],
-      "status": "pending",
+      "status": "in_progress",
       "agents": [
         "business-analyst-agent",
         "product-manager-agent",
