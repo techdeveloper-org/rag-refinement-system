@@ -1,0 +1,27 @@
+{
+  "generated_by": "Phase 5 Blueprint Documentation (TODO-06)",
+  "generated_at": "2026-06-06",
+  "note": "No live draw.io share service is provisioned for this project, so every 'url' is null. Each .drawio file is editable locally in draw.io desktop, app.diagrams.net (File > Open), and the VS Code draw.io extension. The 'mermaid_source' is the canonical, GitHub-renderable diagram; 'kind' marks whether the .drawio is a full mxGraph rendering or a placeholder referencing the Mermaid source (per the TODO-06 honest-verdict instruction).",
+  "share_service": null,
+  "diagrams": [
+    { "stem": "class_diagram", "drawio": "drawio/class_diagram.drawio", "mermaid_source": "uml/class_diagram.md", "kind": "full", "url": null },
+    { "stem": "component_diagram", "drawio": "drawio/component_diagram.drawio", "mermaid_source": "uml/component_diagram.md", "kind": "full", "url": null },
+    { "stem": "sequence_diagram", "drawio": "drawio/sequence_diagram.drawio", "mermaid_source": "uml/sequence_diagram.md", "kind": "full", "url": null },
+    { "stem": "deployment_diagram", "drawio": "drawio/deployment_diagram.drawio", "mermaid_source": "uml/deployment_diagram.md", "kind": "full", "url": null },
+    { "stem": "package_diagram", "drawio": "drawio/package_diagram.drawio", "mermaid_source": "uml/package_diagram.md", "kind": "placeholder", "url": null },
+    { "stem": "state_diagram", "drawio": "drawio/state_diagram.drawio", "mermaid_source": "uml/state_diagram.md", "kind": "placeholder", "url": null },
+    { "stem": "activity_diagram", "drawio": "drawio/activity_diagram.drawio", "mermaid_source": "uml/activity_diagram.md", "kind": "placeholder", "url": null },
+    { "stem": "usecase_diagram", "drawio": "drawio/usecase_diagram.drawio", "mermaid_source": "uml/usecase_diagram.md", "kind": "placeholder", "url": null },
+    { "stem": "object_diagram", "drawio": "drawio/object_diagram.drawio", "mermaid_source": "uml/object_diagram.md", "kind": "placeholder", "url": null },
+    { "stem": "composite_diagram", "drawio": "drawio/composite_diagram.drawio", "mermaid_source": "uml/composite_diagram.md", "kind": "placeholder", "url": null },
+    { "stem": "interaction_diagram", "drawio": "drawio/interaction_diagram.drawio", "mermaid_source": "uml/interaction_diagram.md", "kind": "placeholder", "url": null },
+    { "stem": "communication_diagram", "drawio": "drawio/communication_diagram.drawio", "mermaid_source": "uml/communication_diagram.md", "kind": "placeholder", "url": null },
+    { "stem": "call_graph_diagram", "drawio": "drawio/call_graph_diagram.drawio", "mermaid_source": "uml/call_graph_diagram.md", "kind": "placeholder", "url": null }
+  ],
+  "summary": {
+    "total": 13,
+    "full_mxgraph": 4,
+    "placeholder": 9,
+    "with_live_url": 0
+  }
+}

@@ -207,7 +207,8 @@
       "depends_on": [
         "TODO-05"
       ],
-      "status": "in_progress",
+      "status": "done",
+      "status_note": "DOCUMENTATION APPROVED (2 rounds, 0 open items, SRS FR->PRD traceability 100%). SRS.md (6 sections, 29 FR + 15 NFR traced, 29 AC), uml/ (13 Mermaid, all parse clean), drawio/ (13 mxGraph: 4 full + 9 placeholders), drawio_urls.json + doc_verdict.json written. Awaiting user review at STOP point.",
       "agents": [
         "business-analyst-agent",
         "product-manager-agent",
@@ -229,7 +230,13 @@
       "gate": "DOCUMENTATION APPROVED; SRS FR->PRD traceable",
       "stop_point": "User reviews SRS + UML",
       "context_file": "todos/todo-06-phase5-srs-and-uml-documentation.md",
-      "completed_artifacts": []
+      "completed_artifacts": [
+        "SRS.md",
+        "docs/phase-5-documentation/doc_verdict.json",
+        "docs/phase-5-documentation/drawio_urls.json",
+        "uml/ (13, gitignored)",
+        "drawio/ (13, gitignored)"
+      ]
     },
     {
       "id": "TODO-07",
@@ -239,7 +246,7 @@
       "depends_on": [
         "TODO-06"
       ],
-      "status": "pending",
+      "status": "in_progress",
       "agents": [
         "scrum-master-agent",
         "agile-tooling-specialist",
