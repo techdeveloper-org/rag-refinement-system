@@ -240,7 +240,8 @@ async def ingest_document(
     response_model_exclude_none=True,
 )
 async def list_documents(
-    page: int = Query(default=1, ge=1),
+    # le=10_000 prevents OFFSET amplification attacks
+    page: int = Query(default=1, ge=1, le=10_000),
     page_size: int = Query(default=20, ge=1, le=100),
     domain: str | None = Query(default=None, max_length=64),
     principal: Principal = Depends(rate_limit()),

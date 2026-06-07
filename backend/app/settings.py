@@ -55,9 +55,13 @@ class Settings(BaseSettings):
     jwt_secret: str | None = Field(default=None, alias="JWT_SECRET")
     jwt_algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
     jwt_audience: str = Field(default="rag-refinement-personal", alias="JWT_AUDIENCE")
-    jwt_issuer: str | None = Field(default=None, alias="JWT_ISSUER")
+    jwt_issuer: str = Field(alias="JWT_ISSUER")
 
     api_key_salt: str | None = Field(default=None, alias="API_KEY_SALT")
+
+    generation_thinking_budget_tokens: int = Field(
+        default=5000, alias="GENERATION_THINKING_BUDGET_TOKENS"
+    )
 
     rate_limit_default_per_minute: int = Field(
         default=60, alias="RATE_LIMIT_DEFAULT_PER_MINUTE"

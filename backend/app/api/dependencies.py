@@ -99,8 +99,12 @@ def _generation_llm_singleton() -> GenerationLLM:
         A live :class:`ClaudeGenerationLLM`; its client is built on first stream.
     """
     from backend.app.adapters.generation import ClaudeGenerationLLM
+    from backend.app.settings import get_settings
 
-    return ClaudeGenerationLLM()
+    settings = get_settings()
+    return ClaudeGenerationLLM(
+        thinking_budget_tokens=settings.generation_thinking_budget_tokens
+    )
 
 
 def get_document_store() -> DocumentStore:

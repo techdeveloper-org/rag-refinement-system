@@ -271,14 +271,19 @@ class RouterModuleAdapter:
         Returns:
             A :class:`RouterDecision` with the merged routed sections.
         """
-        results = await asyncio.gather(
+        raw = await asyncio.gather(
             *[
                 self._route_one(
                     tenant_id, doc_id, query, confidence_threshold, max_sections
                 )
                 for doc_id in document_ids
-            ]
+            ],
+            return_exceptions=True,
         )
+        errors = [r for r in raw if isinstance(r, BaseException)]
+        if errors:
+            raise errors[0]
+        results = raw
         all_sections: list[RoutedSection] = []
         total_time_ms = 0
         rationales: list[str] = []

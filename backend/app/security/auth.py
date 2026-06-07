@@ -229,7 +229,12 @@ def _resolve_jwt_principal(token: str, settings: Settings) -> Principal:
     """
     claims = _decode_jwt(token, settings)
     subject = str(claims.get("sub", ""))
-    tenant_id = claims.get("tenant_id") or claims.get("tid")
+    if "tenant_id" in claims and claims["tenant_id"]:
+        tenant_id: object = claims["tenant_id"]
+    elif "tid" in claims and claims["tid"]:
+        tenant_id = claims["tid"]
+    else:
+        tenant_id = None
     if not subject or not tenant_id:
         raise unauthorized("Bearer token is missing required claims.")
     return Principal(

@@ -29,7 +29,8 @@ import anyio
 
 from backend.app.api.interfaces import DependencyUnavailable, IngestOutcome, SectionRecord
 from ingestion import section_id_for
-from ingestion.parser import Parser, content_hash
+from ingestion.embedder import EmbedderDimensionError
+from ingestion.parser import Parser
 from ingestion.pipeline import (
     IngestInput,
     SectionStore,
@@ -75,17 +76,6 @@ def _toc_to_records(
         for ordinal, entry in enumerate(toc)
     ]
 
-
-def _total_pages(toc: list[dict[str, Any]]) -> int:
-    """Derive the document page count from the resolved TOC.
-
-    Args:
-        toc: Pipeline TOC dicts.
-
-    Returns:
-        The maximum ``page_end`` across the TOC, or 0 for an empty TOC.
-    """
-    return max((int(entry.get("page_end", 0)) for entry in toc), default=0)
 
 
 def _ingest_status(*, no_retention: bool, fallback_only: bool) -> str:
@@ -146,16 +136,18 @@ class PipelineIngestor:
     def _run_pipeline(self, doc: IngestInput) -> tuple[dict[str, Any], bool]:
         """Run the synchronous pipeline and detect prior-existence for dedup.
 
+        The ``pre_existing`` flag is read from the pipeline result dict rather than
+        from a pre-ingest hash lookup, eliminating the TOCTOU race where two
+        concurrent identical uploads both see ``existing=None`` before either ingest
+        completes (F-06).
+
         Args:
             doc: The composed ingest input.
 
         Returns:
             A tuple of (pipeline result dict, deduplicated flag). The dedup flag is
-            True when the content hash already mapped to a doc_id before this run.
+            True when the pipeline reports the content hash was already present.
         """
-        existing = self._section_store.find_doc_id_by_hash(
-            doc.tenant_id, content_hash(doc.data)
-        )
         result = self._ingest(
             doc,
             parser=self._parser,
@@ -164,7 +156,8 @@ class PipelineIngestor:
             vector_store=self._vector_store,
             llm_refiner=self._llm_refiner,
         )
-        return result, existing is not None
+        deduplicated = bool(result.get("pre_existing", False))
+        return result, deduplicated
 
     async def ingest_document(
         self,
@@ -203,6 +196,14 @@ class PipelineIngestor:
             result, deduplicated = await anyio.to_thread.run_sync(self._run_pipeline, doc)
         except DependencyUnavailable:
             raise
+        except EmbedderDimensionError as exc:
+            from backend.app.errors import ProblemException
+            raise ProblemException(
+                status_code=500,
+                code="EMBEDDER_MISCONFIGURATION",
+                title="Embedder misconfiguration",
+                detail=str(exc),
+            ) from exc
         except Exception as exc:
             raise DependencyUnavailable(f"Ingestion pipeline failed: {exc}") from exc
 
@@ -212,7 +213,7 @@ class PipelineIngestor:
         return IngestOutcome(
             doc_id=doc_id,
             title=title,
-            total_pages=_total_pages(toc),
+            total_pages=int(result.get("total_pages") or 0),
             toc=_toc_to_records(doc_id, tenant_id, toc),
             ingest_status=_ingest_status(
                 no_retention=no_retention, fallback_only=fallback_only

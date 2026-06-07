@@ -153,7 +153,7 @@ class TestEvaluateReadiness:
 
     async def test_unconfigured_dependencies_report_degraded(self) -> None:
         """Unconfigured DATABASE_URL/QDRANT_URL surface as degraded + down."""
-        settings = Settings(database_url=None, qdrant_url=None)
+        settings = Settings(database_url=None, qdrant_url=None, JWT_ISSUER="test-issuer")
         readiness = await health.evaluate_readiness(settings)
         assert readiness.status == "degraded"
         assert readiness.dependencies == {"postgres": "down", "qdrant": "down"}
@@ -172,7 +172,9 @@ class TestEvaluateReadiness:
         monkeypatch.setattr(health, "_check_postgres", _pg_up)
         monkeypatch.setattr(health, "_check_qdrant", _qd_up)
         settings = Settings(
-            DATABASE_URL="postgresql://h:5432/db", QDRANT_URL="http://q:6333"
+            DATABASE_URL="postgresql://h:5432/db",
+            QDRANT_URL="http://q:6333",
+            JWT_ISSUER="test-issuer",
         )
         readiness = await health.evaluate_readiness(settings)
         assert readiness.status == "ready"
@@ -192,7 +194,9 @@ class TestEvaluateReadiness:
         monkeypatch.setattr(health, "_check_postgres", _pg_up)
         monkeypatch.setattr(health, "_check_qdrant", _qd_down)
         settings = Settings(
-            DATABASE_URL="postgresql://h:5432/db", QDRANT_URL="http://q:6333"
+            DATABASE_URL="postgresql://h:5432/db",
+            QDRANT_URL="http://q:6333",
+            JWT_ISSUER="test-issuer",
         )
         readiness = await health.evaluate_readiness(settings)
         assert readiness.status == "degraded"

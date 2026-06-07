@@ -178,6 +178,10 @@ class IngestResult:
         chunks_upserted: Number of chunk points upserted (0 in fallback /
             no-retention).
         fallback_only: True for Scenario C (whole-document RAG path).
+        total_pages: Actual page count from the parsed document (correct for all
+            scenarios including Scenario C where toc is empty).
+        pre_existing: True when the content hash was already present in the store
+            before this ingest run (used to determine the dedup response code).
     """
 
     doc_id: str
@@ -185,12 +189,15 @@ class IngestResult:
     section_rows_written: int = 0
     chunks_upserted: int = 0
     fallback_only: bool = False
+    total_pages: int = 0
+    pre_existing: bool = False
 
     def as_dict(self) -> dict[str, Any]:
         """Return the result as the plain dict the contract specifies.
 
         Returns:
-            ``{doc_id, toc, section_rows_written, chunks_upserted, fallback_only}``.
+            ``{doc_id, toc, section_rows_written, chunks_upserted, fallback_only,
+            total_pages, pre_existing}``.
         """
         return {
             "doc_id": self.doc_id,
@@ -198,6 +205,8 @@ class IngestResult:
             "section_rows_written": self.section_rows_written,
             "chunks_upserted": self.chunks_upserted,
             "fallback_only": self.fallback_only,
+            "total_pages": self.total_pages,
+            "pre_existing": self.pre_existing,
         }
 
 
@@ -429,4 +438,6 @@ def ingest_document(
         section_rows_written=section_rows_written,
         chunks_upserted=chunks_upserted,
         fallback_only=fallback_only_flag,
+        total_pages=parsed.page_count,
+        pre_existing=existing is not None,
     ).as_dict()

@@ -40,6 +40,7 @@ TENANT_B = "tenant_b"
 JWT_SECRET = "test-jwt-secret-not-a-real-key-padded-32b"  # noqa: S105 - test-only literal
 API_KEY_SALT = "test-api-key-salt"  # noqa: S105 - test-only literal
 JWT_AUDIENCE = "rag-refinement-personal"
+JWT_ISSUER = "test-issuer"
 
 
 def _doc(doc_id: str, tenant_id: str, *, total_pages: int = 10, title: str = "T") -> DocumentRecord:

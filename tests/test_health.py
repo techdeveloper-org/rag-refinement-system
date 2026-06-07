@@ -72,7 +72,7 @@ def test_ready_returns_200_when_deps_up(
 @pytest.mark.anyio
 async def test_unconfigured_deps_report_down() -> None:
     """With no DATABASE_URL/QDRANT_URL set, readiness is degraded."""
-    settings = Settings(DATABASE_URL=None, QDRANT_URL=None)
+    settings = Settings(DATABASE_URL=None, QDRANT_URL=None, JWT_ISSUER="test-issuer")
     readiness = await health_module.evaluate_readiness(settings)
     assert readiness.status == "degraded"
     assert readiness.dependencies["postgres"] == "down"

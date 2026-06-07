@@ -42,6 +42,7 @@ from backend.app.errors import (
     document_not_found,
     internal_error,
     service_unavailable,
+    validation_error,
 )
 from backend.app.security.auth import Principal
 from backend.app.security.rate_limit import rate_limit
@@ -138,10 +139,28 @@ async def _answer_stream(
     except DependencyUnavailable as exc:
         problem = service_unavailable(str(exc) or "Generation dependency unavailable.")
         problem.query_id = query_id
+        yield _sse_event(
+            "final",
+            AnswerFinalEvent(
+                query_id=query_id,
+                answer="".join(answer_parts),
+                citations=_build_citations(decision),
+                routing=_build_routing_summary(decision),
+            ).model_dump(exclude_none=True),
+        )
         yield _sse_event("error", problem.to_problem())
     except Exception:  # noqa: BLE001 - mid-stream failures become an SSE error event
         problem = internal_error()
         problem.query_id = query_id
+        yield _sse_event(
+            "final",
+            AnswerFinalEvent(
+                query_id=query_id,
+                answer="".join(answer_parts),
+                citations=_build_citations(decision),
+                routing=_build_routing_summary(decision),
+            ).model_dump(exclude_none=True),
+        )
         yield _sse_event("error", problem.to_problem())
 
 
@@ -180,6 +199,13 @@ async def answer_query(
     document = await store.get_document(principal.tenant_id, body.document_id)
     if document is None:
         raise document_not_found()
+
+    if document.fallback_only:
+        # TODO: product owner to confirm — Option B (whole-document RAG) may replace this
+        raise validation_error(
+            detail="This document was indexed in fallback mode and does not support section-level routing.",
+            errors=[{"field": "document_id", "message": "fallback-only document"}],
+        )
 
     try:
         decision = await routing.route(

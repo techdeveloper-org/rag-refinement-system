@@ -20,7 +20,6 @@ from backend.app.adapters.generation import ClaudeGenerationLLM, _build_context
 from backend.app.adapters.ingestor import (
     PipelineIngestor,
     _ingest_status,
-    _total_pages,
 )
 from backend.app.adapters.router import RouterModuleAdapter, _merge_fairly
 from backend.app.api.interfaces import (
@@ -529,11 +528,6 @@ class TestPipelineIngestor:
         assert _ingest_status(no_retention=True, fallback_only=False) == "ephemeral"
         assert _ingest_status(no_retention=False, fallback_only=True) == "fallback_only"
         assert _ingest_status(no_retention=False, fallback_only=False) == "indexed"
-
-    def test_total_pages_from_toc(self) -> None:
-        """total_pages is the max page_end across the TOC (0 when empty)."""
-        assert _total_pages([{"page_end": 3}, {"page_end": 9}]) == 9
-        assert _total_pages([]) == 0
 
 
 # --- FIX-C-03: SqlAlchemyDocumentStore + ClaudeGenerationLLM -----------------

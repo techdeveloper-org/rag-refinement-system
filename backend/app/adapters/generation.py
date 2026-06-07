@@ -28,6 +28,9 @@ DEFAULT_GENERATION_MODEL = os.environ.get("GENERATION_MODEL", "claude-opus-4-8")
 DEFAULT_MAX_TOKENS = 4096
 """Output token ceiling for a synthesized answer."""
 
+DEFAULT_THINKING_BUDGET_TOKENS = 5000
+"""Default extended-thinking budget in tokens."""
+
 _SYSTEM_PROMPT = (
     "You are a retrieval-augmented answer assistant. Answer the user's question "
     "using only the routed document sections provided as context. Cite section "
@@ -66,6 +69,7 @@ class ClaudeGenerationLLM:
         self,
         model: str = DEFAULT_GENERATION_MODEL,
         max_tokens: int = DEFAULT_MAX_TOKENS,
+        thinking_budget_tokens: int = DEFAULT_THINKING_BUDGET_TOKENS,
         client: object | None = None,
     ) -> None:
         """Initialize the adapter.
@@ -73,12 +77,15 @@ class ClaudeGenerationLLM:
         Args:
             model: Generation model id (defaults to Claude Opus 4.8).
             max_tokens: Output token ceiling for the synthesized answer.
+            thinking_budget_tokens: Extended-thinking budget in tokens passed to
+                the Anthropic ``thinking`` parameter.
             client: Optional pre-built ``anthropic.AsyncAnthropic`` instance. When
                 omitted, one is constructed lazily on first use so importing this
                 module never requires credentials.
         """
         self._model = model
         self._max_tokens = max_tokens
+        self._thinking_budget_tokens = thinking_budget_tokens
         self._client = client
 
     def _ensure_client(self) -> object:
@@ -127,7 +134,7 @@ class ClaudeGenerationLLM:
         async with client.messages.stream(  # type: ignore[attr-defined]
             model=self._model,
             max_tokens=self._max_tokens,
-            thinking={"type": "adaptive"},
+            thinking={"type": "enabled", "budget_tokens": self._thinking_budget_tokens},
             system=_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_message}],
         ) as stream:

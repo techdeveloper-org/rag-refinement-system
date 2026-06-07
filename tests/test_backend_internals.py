@@ -141,7 +141,7 @@ class TestJwtHelpers:
     @pytest.mark.anyio
     async def test_decode_unconfigured_secret_raises_401(self) -> None:
         """Decoding without a configured JWT secret raises a 401 problem."""
-        settings = Settings(JWT_SECRET=None)
+        settings = Settings(JWT_SECRET=None, JWT_ISSUER="test-issuer")
         with pytest.raises(ProblemException) as excinfo:
             _decode_jwt("token", settings)
         assert excinfo.value.status_code == 401
@@ -157,7 +157,7 @@ class TestJwtHelpers:
 
         monkeypatch.setattr(auth_mod, "_decode_jwt", _fake_decode)
         with pytest.raises(ProblemException) as excinfo:
-            _resolve_jwt_principal("token", Settings(JWT_SECRET="x" * 32))
+            _resolve_jwt_principal("token", Settings(JWT_SECRET="x" * 32, JWT_ISSUER="test-issuer"))
         assert excinfo.value.status_code == 401
 
 
@@ -177,7 +177,7 @@ class TestResolvePrincipalBranches:
         }
         request = Request(scope)
         with pytest.raises(ProblemException) as excinfo:
-            resolve_principal(request, Settings(JWT_SECRET="x" * 32))
+            resolve_principal(request, Settings(JWT_SECRET="x" * 32, JWT_ISSUER="test-issuer"))
         assert excinfo.value.status_code == 401
 
 
