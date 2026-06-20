@@ -72,7 +72,7 @@ async def _check_postgres(database_url: str, timeout_seconds: float) -> bool:
         return True
     except asyncio.CancelledError:
         raise
-    except BaseException:
+    except Exception:
         return False
 
 
@@ -91,6 +91,8 @@ async def _check_qdrant(qdrant_url: str, timeout_seconds: float) -> bool:
         async with httpx.AsyncClient(timeout=timeout_seconds) as client:
             response = await client.get(probe_url)
         return response.is_success
+    except asyncio.CancelledError:
+        raise
     except (httpx.HTTPError, OSError):
         return False
 

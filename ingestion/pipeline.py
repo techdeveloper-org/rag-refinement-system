@@ -154,6 +154,7 @@ class SectionStore(Protocol):
         ingest_status: str,
         fallback_only: bool,
         rows: list[SectionRow],
+        residency_region: str = "GLOBAL",
     ) -> int:
         """Atomically upsert the document row and replace its sections.
 
@@ -167,6 +168,7 @@ class SectionStore(Protocol):
             ingest_status: One of the INGEST_STATUS_VALUES constants.
             fallback_only: True when no structure was detected (Scenario C).
             rows: New section rows to persist.
+            residency_region: DPDP data-residency region (FR-028); defaults to GLOBAL.
 
         Returns:
             The number of section rows written.

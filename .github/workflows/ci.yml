@@ -67,25 +67,47 @@ jobs:
         run: pip-audit
       - name: detect-secrets scan (blocking)
         run: |
-          detect-secrets scan backend ingestion router db tests \
-            --exclude-files '\.env\.example$' > .secrets.scan.json
+          # Scan and compare against the committed baseline so acknowledged
+          # false-positives (test fixtures, enum value strings) do not block CI.
+          # Only findings that are NEW relative to .secrets.baseline cause failure.
+          python -m detect_secrets scan \
+            --exclude-files '\.env\.example$' \
+            backend ingestion router db tests > .secrets.scan.json
           python - <<'PY'
           import json
           import sys
 
-          with open(".secrets.scan.json", encoding="utf-8") as handle:
-              report = json.load(handle)
+          def _key(path, secret):
+              return (path, secret["line_number"], secret["type"])
 
-          findings = report.get("results", {})
-          if findings:
-              for path, secrets in findings.items():
-                  for secret in secrets:
-                      line = secret.get("line_number", "?")
-                      kind = secret.get("type", "unknown")
-                      print(f"SECRET DETECTED: {path}:{line} [{kind}]")
-              print("detect-secrets found potential secrets; failing the build.")
+          with open(".secrets.baseline", encoding="utf-8") as f:
+              baseline = json.load(f)
+          with open(".secrets.scan.json", encoding="utf-8") as f:
+              scan = json.load(f)
+
+          baseline_keys = {
+              _key(path, s)
+              for path, secrets in baseline.get("results", {}).items()
+              for s in secrets
+          }
+
+          new_findings = []
+          for path, secrets in scan.get("results", {}).items():
+              for secret in secrets:
+                  if _key(path, secret) not in baseline_keys:
+                      new_findings.append((path, secret))
+
+          if new_findings:
+              for path, secret in new_findings:
+                  line = secret.get("line_number", "?")
+                  kind = secret.get("type", "unknown")
+                  print(f"NEW SECRET DETECTED: {path}:{line} [{kind}]")
+              print("detect-secrets found new potential secrets not in baseline; failing.")
               sys.exit(1)
-          print("detect-secrets: no secrets detected.")
+          print(
+              f"detect-secrets: no new secrets "
+              f"({len(baseline_keys)} acknowledged findings in baseline)."
+          )
           PY
 
   frontend-security:

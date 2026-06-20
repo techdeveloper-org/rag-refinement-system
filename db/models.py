@@ -26,6 +26,7 @@ are parameterized by construction (no string-concatenated SQL).
 from __future__ import annotations
 
 import datetime as _dt
+from typing import Any
 
 from sqlalchemy import (
     BigInteger,
@@ -96,7 +97,7 @@ class Document(Base):
         default="GLOBAL",
     )
     content_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
-    pii_flags: Mapped[dict] = mapped_column(
+    pii_flags: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, default=dict
     )
     tombstoned_at: Mapped[_dt.datetime | None] = mapped_column(
@@ -117,6 +118,8 @@ class Document(Base):
 
     __table_args__ = (
         CheckConstraint("total_pages >= 0", name="documents_total_pages_nonneg"),
+        # Canonical DDL: migrations/002_indexes_constraints.sql (#104).
+        # Keep the partial predicate (content_hash IS NOT NULL) in sync with that migration.
         Index(
             "uq_documents_tenant_hash",
             "tenant_id",
@@ -157,7 +160,7 @@ class Section(Base):
     page_start: Mapped[int] = mapped_column(Integer, nullable=False)
     page_end: Mapped[int] = mapped_column(Integer, nullable=False)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
-    pii_flags: Mapped[dict] = mapped_column(
+    pii_flags: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, default=dict
     )
     created_at: Mapped[_dt.datetime] = mapped_column(

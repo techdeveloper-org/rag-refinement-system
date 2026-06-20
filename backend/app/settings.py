@@ -70,6 +70,8 @@ class Settings(BaseSettings):
     generation_max_tokens: int = Field(
         default=16000, alias="GENERATION_MAX_TOKENS"
     )
+    # PRODUCTION SECURITY: default ["*"] allows all origins. Set CORS_ALLOWED_ORIGINS
+    # to your known front-end origins (e.g. ["https://app.example.com"]) before deploying.
     cors_allowed_origins: list[str] = Field(
         default=["*"], alias="CORS_ALLOWED_ORIGINS"
     )

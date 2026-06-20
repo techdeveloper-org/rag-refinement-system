@@ -84,5 +84,8 @@ docker-compose.override.yml
 .coverage
 .coverage.*
 
+# detect-secrets: scan output (ephemeral); baseline is tracked
+.secrets.scan.json
+
 # TypeScript incremental build cache
 *.tsbuildinfo
