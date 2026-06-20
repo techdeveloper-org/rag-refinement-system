@@ -9,6 +9,8 @@ are reachable and returns HTTP 503 when any configured dependency is down.
 
 from __future__ import annotations
 
+import asyncio
+
 import httpx
 from fastapi import APIRouter, Response, status
 from pydantic import BaseModel
@@ -48,24 +50,22 @@ class ReadinessStatus(BaseModel):
 async def _check_postgres(database_url: str, timeout_seconds: float) -> bool:
     """Check PostgreSQL reachability by performing a real authenticated query.
 
-    Opens a genuine asyncpg connection and executes ``SELECT 1`` so that a
+    Opens a genuine asyncpg connection and executes SELECT 1 so that a
     healthy result requires valid credentials, not just an open TCP port.
     The connection is closed immediately after the probe query succeeds.
 
     Args:
-        database_url: PostgreSQL DSN (``postgresql://host:port/db``).
+        database_url: PostgreSQL DSN (supports host-based and Unix socket URLs).
         timeout_seconds: Connection timeout budget in seconds.
 
     Returns:
         True if the authenticated query succeeded, otherwise False.
     """
-    import asyncio
-
     import asyncpg
 
     try:
         conn = await asyncio.wait_for(
-            asyncpg.connect(database_url, timeout=timeout_seconds),
+            asyncpg.connect(database_url),
             timeout=timeout_seconds,
         )
         try:
@@ -75,7 +75,7 @@ async def _check_postgres(database_url: str, timeout_seconds: float) -> bool:
         return True
     except asyncio.CancelledError:
         raise
-    except Exception:
+    except BaseException:
         return False
 
 
@@ -98,6 +98,11 @@ async def _check_qdrant(qdrant_url: str, timeout_seconds: float) -> bool:
         return False
 
 
+async def _never_ready() -> bool:
+    """Return False immediately for an unconfigured dependency."""
+    return False
+
+
 async def evaluate_readiness(settings: Settings) -> ReadinessStatus:
     """Probe all configured dependencies and build a readiness report.
 
@@ -114,16 +119,18 @@ async def evaluate_readiness(settings: Settings) -> ReadinessStatus:
     timeout_seconds = settings.readiness_timeout_seconds
     dependencies: dict[str, str] = {}
 
-    if settings.database_url:
-        postgres_up = await _check_postgres(settings.database_url, timeout_seconds)
-    else:
-        postgres_up = False
+    postgres_coro = (
+        _check_postgres(settings.database_url, timeout_seconds)
+        if settings.database_url
+        else _never_ready()
+    )
+    qdrant_coro = (
+        _check_qdrant(settings.qdrant_url, timeout_seconds)
+        if settings.qdrant_url
+        else _never_ready()
+    )
+    postgres_up, qdrant_up = await asyncio.gather(postgres_coro, qdrant_coro)
     dependencies["postgres"] = _DEP_UP if postgres_up else _DEP_DOWN
-
-    if settings.qdrant_url:
-        qdrant_up = await _check_qdrant(settings.qdrant_url, timeout_seconds)
-    else:
-        qdrant_up = False
     dependencies["qdrant"] = _DEP_UP if qdrant_up else _DEP_DOWN
 
     all_up = all(state == _DEP_UP for state in dependencies.values())

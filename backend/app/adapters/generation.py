@@ -17,6 +17,7 @@ timeouts.
 
 from __future__ import annotations
 
+import asyncio
 import os
 from collections.abc import AsyncIterator
 
@@ -25,7 +26,7 @@ from backend.app.api.interfaces import DependencyUnavailable, RoutedSection
 DEFAULT_GENERATION_MODEL = os.environ.get("GENERATION_MODEL", "claude-opus-4-8")
 """Answer-synthesis model id (overridable via the GENERATION_MODEL env var)."""
 
-DEFAULT_MAX_TOKENS = 16000
+DEFAULT_MAX_TOKENS = int(os.environ.get("GENERATION_MAX_TOKENS", "16000"))
 """Output token ceiling for a synthesized answer (must exceed DEFAULT_THINKING_BUDGET_TOKENS)."""
 
 DEFAULT_THINKING_BUDGET_TOKENS = 5000
@@ -90,9 +91,13 @@ class ClaudeGenerationLLM:
         self._max_tokens = max_tokens
         self._thinking_budget_tokens = thinking_budget_tokens
         self._client = client
+        self._client_lock = asyncio.Lock()
 
-    def _ensure_client(self) -> object:
+    async def _ensure_client(self) -> object:
         """Lazily construct the async Anthropic client (env-resolved credentials).
+
+        Uses a double-checked lock so concurrent first requests do not race to
+        build multiple client instances.
 
         Returns:
             The async Anthropic client instance.
@@ -102,13 +107,15 @@ class ClaudeGenerationLLM:
                 (surfaced as a mid-stream SSE error / 503 per the answer contract).
         """
         if self._client is None:
-            try:
-                import anthropic
-            except ImportError as exc:
-                raise DependencyUnavailable(
-                    "anthropic package is required for answer generation"
-                ) from exc
-            self._client = anthropic.AsyncAnthropic(max_retries=0)
+            async with self._client_lock:
+                if self._client is None:
+                    try:
+                        import anthropic
+                    except ImportError as exc:
+                        raise DependencyUnavailable(
+                            "anthropic package is required for answer generation"
+                        ) from exc
+                    self._client = anthropic.AsyncAnthropic(max_retries=0)
         return self._client
 
     async def stream_answer(
@@ -126,21 +133,45 @@ class ClaudeGenerationLLM:
             Answer text fragments as they stream from Claude.
 
         Raises:
-            DependencyUnavailable: When the generation client cannot be built.
+            DependencyUnavailable: When the generation client cannot be built or
+                when the Anthropic API is unreachable / returns an auth or rate-limit
+                error.
         """
-        client = self._ensure_client()
+        client = await self._ensure_client()
         context = _build_context(sections)
         user_message = (
             f"Question:\n{query}\n\nRouted sections:\n{context}\n\n"
             "Answer the question grounded in these sections."
         )
-        async with client.messages.stream(  # type: ignore[attr-defined]
-            model=self._model,
-            max_tokens=self._max_tokens,
-            thinking={"type": "enabled", "budget_tokens": self._thinking_budget_tokens},
-            system=_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_message}],
-            timeout=DEFAULT_STREAM_TIMEOUT,
-        ) as stream:
-            async for text in stream.text_stream:
-                yield text
+        try:
+            async with client.messages.stream(  # type: ignore[attr-defined]
+                model=self._model,
+                max_tokens=self._max_tokens,
+                thinking={"type": "enabled", "budget_tokens": self._thinking_budget_tokens},
+                system=_SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": user_message}],
+                timeout=DEFAULT_STREAM_TIMEOUT,
+            ) as stream:
+                async for text in stream.text_stream:
+                    yield text
+        except DependencyUnavailable:
+            raise
+        except Exception as exc:
+            try:
+                import anthropic as _anthropic
+                if isinstance(
+                    exc,
+                    (
+                        _anthropic.RateLimitError,
+                        _anthropic.AuthenticationError,
+                        _anthropic.APIConnectionError,
+                    ),
+                ):
+                    raise DependencyUnavailable(
+                        f"Anthropic API unavailable: {type(exc).__name__}"
+                    ) from exc
+            except ImportError:
+                pass
+            raise DependencyUnavailable(
+                f"Generation dependency error: {type(exc).__name__}"
+            ) from exc

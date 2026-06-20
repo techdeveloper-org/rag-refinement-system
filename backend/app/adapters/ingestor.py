@@ -213,15 +213,29 @@ class PipelineIngestor:
         except Exception as exc:
             raise DependencyUnavailable("Ingestion pipeline failed; check service logs for details.") from exc
 
+        doc_id_str = str(result["doc_id"])
+        try:
+            from router.graph import invalidate_toc_cache
+            invalidate_toc_cache(doc_id_str)
+        except (ImportError, Exception):
+            pass
+
+        if not no_retention and residency_region != "GLOBAL":
+            try:
+                self._section_store.update_residency_region(
+                    doc_id_str, tenant_id, residency_region
+                )
+            except Exception:
+                pass
+
         toc = list(result.get("toc") or [])
-        doc_id = str(result["doc_id"])
         fallback_only = bool(result.get("fallback_only", False))
         extracted_title = result.get("title") or title
         return IngestOutcome(
-            doc_id=doc_id,
+            doc_id=doc_id_str,
             title=extracted_title,
             total_pages=int(result.get("total_pages") or 0),
-            toc=_toc_to_records(doc_id, tenant_id, toc),
+            toc=_toc_to_records(doc_id_str, tenant_id, toc),
             ingest_status=_ingest_status(
                 no_retention=no_retention, fallback_only=fallback_only
             ),

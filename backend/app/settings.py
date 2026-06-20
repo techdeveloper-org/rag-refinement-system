@@ -32,6 +32,11 @@ class Settings(BaseSettings):
         max_upload_bytes: Maximum accepted upload body size in bytes; an upload
             exceeding this is rejected with 413 before the body is fully read
             (DoS guard, NFR-008). Defaults to 50 MiB.
+        generation_max_tokens: Maximum number of tokens the generation model may
+            produce per response. Defaults to 16 000.
+        cors_allowed_origins: List of origins permitted by the CORS middleware.
+            Defaults to ``["*"]`` (all origins) for development convenience;
+            should be restricted to known front-end origins in production.
     """
 
     model_config = SettingsConfigDict(
@@ -61,6 +66,12 @@ class Settings(BaseSettings):
 
     generation_thinking_budget_tokens: int = Field(
         default=5000, alias="GENERATION_THINKING_BUDGET_TOKENS"
+    )
+    generation_max_tokens: int = Field(
+        default=16000, alias="GENERATION_MAX_TOKENS"
+    )
+    cors_allowed_origins: list[str] = Field(
+        default=["*"], alias="CORS_ALLOWED_ORIGINS"
     )
 
     rate_limit_default_per_minute: int = Field(

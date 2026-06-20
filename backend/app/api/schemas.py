@@ -99,6 +99,13 @@ class RelevantSection(_Strict):
     page_end: Annotated[int, Field(ge=1)]
     confidence: Confidence
 
+    @model_validator(mode="after")
+    def _page_range_valid(self) -> "RelevantSection":
+        """Validate page_start <= page_end."""
+        if self.page_start > self.page_end:
+            raise ValueError(f"page_start ({self.page_start}) must be <= page_end ({self.page_end})")
+        return self
+
 
 class RouteResponse(_Strict):
     """Body of a successful routeQuery (RouteResponse schema)."""
@@ -181,11 +188,18 @@ class TocEntry(_Strict):
     """A single table-of-contents entry (TocEntry schema)."""
 
     section_id: SectionId
-    level: Annotated[int, Field(ge=1)]
+    level: Annotated[int, Field(ge=0)]
     title: str
     page_start: Annotated[int, Field(ge=1)]
     page_end: Annotated[int, Field(ge=1)]
     summary: str | None = None
+
+    @model_validator(mode="after")
+    def _page_range_valid(self) -> "TocEntry":
+        """Validate page_start <= page_end."""
+        if self.page_start > self.page_end:
+            raise ValueError(f"page_start ({self.page_start}) must be <= page_end ({self.page_end})")
+        return self
 
 
 class IngestResponse(_Strict):
@@ -214,7 +228,6 @@ class Document(_Strict):
     title: str | None = None
     total_pages: Annotated[int, Field(ge=0)]
     domain: str | None = None
-    tenant_id: str | None = None
     residency_region: ResidencyRegion
     fallback_only: bool
     created_at: str

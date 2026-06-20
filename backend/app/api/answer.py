@@ -13,8 +13,12 @@ problem+json response **before** the stream opens.
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 from collections.abc import AsyncIterator
+
+_logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
@@ -142,7 +146,11 @@ async def _answer_stream(
         )
         problem.query_id = query_id
         yield _sse_event("error", problem.to_problem())
+    except asyncio.CancelledError:
+        _logger.info("answer stream cancelled (client disconnect); query_id=%s", query_id)
+        raise
     except Exception:  # noqa: BLE001 - mid-stream failures become an SSE error event
+        _logger.exception("unhandled error in answer stream; query_id=%s", query_id)
         problem = internal_error()
         problem.query_id = query_id
         yield _sse_event("error", problem.to_problem())
@@ -211,5 +219,5 @@ async def answer_query(
     return StreamingResponse(
         _answer_stream(query_id, body.query, decision, generator),
         media_type=_SSE_MEDIA_TYPE,
-        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
     )

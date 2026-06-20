@@ -14,6 +14,7 @@ truth.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 # Documented token-reduction band (fraction of input tokens removed by routing
@@ -136,9 +137,9 @@ def calculate_roi(
         ValueError: If the spend is negative/non-finite or the context
             fraction is outside the (0.0, 1.0] range.
     """
-    if current_monthly_spend_usd < 0 or current_monthly_spend_usd != current_monthly_spend_usd:
+    if current_monthly_spend_usd < 0 or math.isnan(current_monthly_spend_usd) or math.isinf(current_monthly_spend_usd):
         raise ValueError("current_monthly_spend_usd must be a finite, non-negative number")
-    if not 0.0 < context_spend_fraction <= 1.0:
+    if not 0.0 < context_spend_fraction <= 1.0 or math.isinf(context_spend_fraction):
         raise ValueError("context_spend_fraction must be in the range (0.0, 1.0]")
 
     addressable = current_monthly_spend_usd * context_spend_fraction

@@ -10,6 +10,7 @@ sections with a display-only token-reduction estimate.
 
 from __future__ import annotations
 
+import asyncio as _asyncio
 import logging
 
 from fastapi import APIRouter, Depends
@@ -28,7 +29,7 @@ from backend.app.api.schemas import (
     RouteRequest,
     RouteResponse,
 )
-from backend.app.errors import document_not_found, service_unavailable
+from backend.app.errors import document_not_found, service_unavailable, validation_error
 from backend.app.security.auth import Principal
 from backend.app.security.rate_limit import rate_limit
 
@@ -85,17 +86,24 @@ async def route_query(
             "returning non-reranked results."
         )
 
-    total_pages = 0
-    for doc_id in document_ids:
+    async def _fetch_doc(doc_id: str):
         try:
-            document = await store.get_document(principal.tenant_id, doc_id)
+            return await store.get_document(principal.tenant_id, doc_id)
         except DependencyUnavailable as exc:
-            raise service_unavailable(
-                str(exc) or "Document store unavailable."
-            ) from exc
+            raise service_unavailable(str(exc) or "Document store unavailable.") from exc
+
+    docs = await _asyncio.gather(*[_fetch_doc(did) for did in document_ids])
+    for document in docs:
         if document is None:
             raise document_not_found()
-        total_pages += document.total_pages
+    total_pages = sum(d.total_pages for d in docs)
+
+    for document in docs:
+        if document.fallback_only:
+            raise validation_error(
+                detail="One or more documents were indexed in fallback mode and do not support section-level routing.",
+                errors=[{"field": "document_ids", "message": "fallback-only document"}],
+            )
 
     try:
         decision = await routing.route(

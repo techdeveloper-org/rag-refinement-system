@@ -20,8 +20,11 @@ The router never invokes the generation LLM.
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from typing import Any
+
+_logger = logging.getLogger(__name__)
 
 from backend.app.api.interfaces import (
     DocumentStore,
@@ -282,9 +285,19 @@ class RouterModuleAdapter:
         )
         errors = [r for r in raw if isinstance(r, BaseException)]
         if errors:
+            import logging as _logging
+            _route_logger = _logging.getLogger(__name__)
             for exc in errors:
                 if isinstance(exc, asyncio.CancelledError):
                     raise exc
+            if len(errors) > 1:
+                _route_logger.error(
+                    "multi-document routing: %d/%d documents failed; raising first error, others logged below",
+                    len(errors),
+                    len(document_ids),
+                )
+                for i, exc in enumerate(errors[1:], 1):
+                    _route_logger.error("routing error %d/%d: %s", i, len(errors), exc, exc_info=exc)
             raise errors[0]
         results = raw
         all_sections: list[RoutedSection] = []

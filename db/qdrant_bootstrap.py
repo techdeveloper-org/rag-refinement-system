@@ -157,22 +157,30 @@ def tenant_section_filter(
 ) -> qm.Filter:
     """Build the mandatory targeted-retrieval filter.
 
-    Encodes ``tenant_id = caller AND section_id IN (router-selected)`` - the
+    Encodes tenant_id = caller AND section_id IN (router-selected) - the
     isolation + scope filter every retrieval must apply (HLD 4.3, OAQ-3/OAQ-5).
-    ``tenant_id`` is required and never optional: it is the IDOR guard.
+    tenant_id is required and never optional: it is the IDOR guard.
 
     Args:
         tenant_id: Owning tenant; mandatory isolation key.
         section_ids: Router-selected section ids to scope the ANN search to.
+            Must be non-empty; calling with an empty list is a programming error
+            since there is no valid retrieval scope with zero sections.
 
     Returns:
         A Qdrant Filter combining the tenant guard and the section scope.
 
     Raises:
-        ValueError: When ``tenant_id`` is empty.
+        ValueError: When tenant_id is empty or whitespace-only, or when
+            section_ids is empty (would expose all tenant chunks).
     """
-    if not tenant_id:
-        raise ValueError("tenant_id is mandatory for retrieval (IDOR guard).")
+    if not tenant_id or not tenant_id.strip():
+        raise ValueError("tenant_id is mandatory and must not be blank (IDOR guard).")
+    if not section_ids:
+        raise ValueError(
+            "section_ids must be non-empty; retrieving with zero sections "
+            "would expose all tenant chunks (IDOR violation)."
+        )
     return qm.Filter(
         must=[
             qm.FieldCondition(

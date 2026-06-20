@@ -131,7 +131,6 @@ def _to_document_schema(record: DocumentRecord) -> Document:
         title=record.title,
         total_pages=record.total_pages,
         domain=record.domain,
-        tenant_id=record.tenant_id,
         residency_region=record.residency_region,
         fallback_only=record.fallback_only,
         created_at=record.created_at,

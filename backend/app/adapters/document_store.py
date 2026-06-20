@@ -237,10 +237,14 @@ class SqlAlchemyDocumentStore:
         Raises:
             DependencyUnavailable: When the structure store is unreachable.
         """
-        stmt = select(Document).where(
-            Document.doc_id == doc_id,
-            Document.tenant_id == tenant_id,
-            Document.tombstoned_at.is_(None),
+        stmt = (
+            select(Document)
+            .where(
+                Document.doc_id == doc_id,
+                Document.tenant_id == tenant_id,
+                Document.tombstoned_at.is_(None),
+            )
+            .with_for_update()
         )
         try:
             async with self._session_factory() as session:
@@ -249,6 +253,11 @@ class SqlAlchemyDocumentStore:
                     if row is None:
                         return False
                     row.tombstoned_at = _dt.datetime.now(_dt.UTC)
+                    try:
+                        from router.graph import invalidate_toc_cache
+                        invalidate_toc_cache(doc_id)
+                    except ImportError:
+                        pass
                     for store in _ERASURE_STORES:
                         session.add(
                             ErasureOutbox(

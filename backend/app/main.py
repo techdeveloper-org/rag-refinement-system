@@ -12,6 +12,7 @@ without credentials.
 from __future__ import annotations
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app.api.answer import router as answer_router
 from backend.app.api.documents import router as documents_router
@@ -36,6 +37,13 @@ def create_app() -> FastAPI:
         title=settings.app_name,
         version=settings.app_version,
         description="TOC-routed retrieval layer backend.",
+    )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_allowed_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
     register_exception_handlers(app)
     app.include_router(health_router)

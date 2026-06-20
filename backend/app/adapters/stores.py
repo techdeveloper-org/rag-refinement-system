@@ -87,6 +87,7 @@ class SqlAlchemySectionStore:
         content_hash_value: str | None,
         ingest_status: str,
         fallback_only: bool,
+        residency_region: str = "GLOBAL",
     ) -> None:
         """Create or update the document row (tenant-scoped).
 
@@ -99,6 +100,7 @@ class SqlAlchemySectionStore:
             content_hash_value: Content hash (None in no-retention mode).
             ingest_status: One of ``db.models.INGEST_STATUS_VALUES``.
             fallback_only: True when no structure was detected (Scenario C).
+            residency_region: DPDP data-residency region (FR-028); defaults to GLOBAL.
         """
         try:
             with self._session_factory() as session, session.begin():
@@ -110,7 +112,6 @@ class SqlAlchemySectionStore:
                 if row is None:
                     row = Document(doc_id=doc_id, tenant_id=tenant_id)
                     session.add(row)
-                row.tenant_id = tenant_id
                 row.title = title
                 row.domain = domain
                 row.total_pages = total_pages
@@ -118,6 +119,7 @@ class SqlAlchemySectionStore:
                 row.ingest_status = ingest_status
                 row.fallback_only = fallback_only
                 row.tombstoned_at = None
+                row.residency_region = residency_region
         except SQLAlchemyError as exc:
             raise DependencyUnavailable("structure store unreachable") from exc
 
@@ -135,6 +137,8 @@ class SqlAlchemySectionStore:
         Raises:
             DependencyUnavailable: When the structure store is unreachable.
         """
+        if not rows:
+            return 0
         try:
             with self._session_factory() as session, session.begin():
                 session.execute(
@@ -153,6 +157,8 @@ class SqlAlchemySectionStore:
                             level=row.level,
                             page_start=row.page_start,
                             page_end=row.page_end,
+                            summary=getattr(row, 'summary', None),
+                            pii_flags=getattr(row, 'pii_flags', {}) or {},
                         )
                     )
                 return len(rows)
@@ -170,6 +176,7 @@ class SqlAlchemySectionStore:
         ingest_status: str,
         fallback_only: bool,
         rows: list[SectionRow],
+        residency_region: str = "GLOBAL",
     ) -> int:
         """Atomically upsert the document row and replace its sections in one transaction.
 
@@ -187,6 +194,7 @@ class SqlAlchemySectionStore:
             ingest_status: One of ``db.models.INGEST_STATUS_VALUES``.
             fallback_only: True when no structure was detected (Scenario C).
             rows: New section rows to persist (may be empty for fallback-only docs).
+            residency_region: DPDP data-residency region (FR-028); defaults to GLOBAL.
 
         Returns:
             The number of section rows written.
@@ -204,7 +212,6 @@ class SqlAlchemySectionStore:
                 if doc_row is None:
                     doc_row = Document(doc_id=doc_id, tenant_id=tenant_id)
                     session.add(doc_row)
-                doc_row.tenant_id = tenant_id
                 doc_row.title = title
                 doc_row.domain = domain
                 doc_row.total_pages = total_pages
@@ -212,7 +219,10 @@ class SqlAlchemySectionStore:
                 doc_row.ingest_status = ingest_status
                 doc_row.fallback_only = fallback_only
                 doc_row.tombstoned_at = None
+                doc_row.residency_region = residency_region
 
+                # DELETE always runs here: for fallback_only docs rows is intentionally
+                # empty, and we still want to clear any stale sections from a prior run.
                 session.execute(
                     delete(Section).where(
                         Section.doc_id == doc_id,
@@ -229,9 +239,37 @@ class SqlAlchemySectionStore:
                             level=row.level,
                             page_start=row.page_start,
                             page_end=row.page_end,
+                            summary=getattr(row, 'summary', None),
+                            pii_flags=getattr(row, 'pii_flags', {}) or {},
                         )
                     )
                 return len(rows)
+        except SQLAlchemyError as exc:
+            raise DependencyUnavailable("structure store unreachable") from exc
+
+    def update_residency_region(self, doc_id: str, tenant_id: str, residency_region: str) -> None:
+        """Update the residency_region for a document (DPDP FR-028).
+
+        Called after ingestion completes to stamp the DPDP data-residency region
+        requested by the caller, which the synchronous pipeline cannot persist
+        because IngestInput has no residency field.
+
+        Args:
+            doc_id: Document primary key.
+            tenant_id: Owning tenant (IDOR guard).
+            residency_region: One of IN, EU, US, GLOBAL.
+
+        Raises:
+            DependencyUnavailable: When the structure store is unreachable.
+        """
+        stmt = select(Document).where(
+            Document.doc_id == doc_id, Document.tenant_id == tenant_id
+        )
+        try:
+            with self._session_factory() as session, session.begin():
+                row = session.scalar(stmt)
+                if row is not None:
+                    row.residency_region = residency_region
         except SQLAlchemyError as exc:
             raise DependencyUnavailable("structure store unreachable") from exc
 

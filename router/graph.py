@@ -179,7 +179,7 @@ async def _node_route(state: RouterState, llm: RouterLLM) -> RouterState:
     raw = await llm.complete(system, messages)
     try:
         parsed = parse_router_llm_json(raw)
-    except ValueError:
+    except Exception:
         state["ranked"] = []
         state["rationale"] = (
             "Routing could not be validated; falling back to full-document search."

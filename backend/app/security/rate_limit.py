@@ -62,6 +62,9 @@ class RateLimiter:
                 window_start, count = now, 0
             count += 1
             self._windows[key] = (window_start, count)
+            expired = [k for k, (ws, _) in self._windows.items() if now - ws >= _WINDOW_SECONDS * 2]
+            for k in expired:
+                del self._windows[k]
             if count >= limit:
                 retry_after = max(1, int(_WINDOW_SECONDS - (now - window_start)))
                 raise rate_limited(retry_after)

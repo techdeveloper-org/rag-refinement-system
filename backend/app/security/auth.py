@@ -255,7 +255,7 @@ def _resolve_jwt_principal(token: str, settings: Settings) -> Principal:
         tenant_id = claims["tid"]
     else:
         tenant_id = None
-    if not subject or not tenant_id:
+    if not subject or tenant_id is None:
         raise unauthorized("Bearer token is missing required claims.")
     if not isinstance(tenant_id, str) or not tenant_id.strip():
         raise unauthorized("Bearer token tenant_id claim must be a non-empty string.")
@@ -279,6 +279,8 @@ def _resolve_api_key_principal(api_key: str) -> Principal:
     record = get_api_key_store().resolve(api_key)
     if record is None:
         raise unauthorized("API key is missing or invalid.")
+    if not isinstance(record.tenant_id, str) or not record.tenant_id.strip():
+        raise unauthorized("API key tenant_id is not a valid non-empty string.")
     return Principal(
         tenant_id=record.tenant_id,
         subject=record.subject,
@@ -304,7 +306,7 @@ def resolve_principal(request: Request, settings: Settings) -> Principal:
         ProblemException: 401 when no valid credential is present.
     """
     api_key = request.headers.get("X-API-Key")
-    if api_key:
+    if api_key and settings.api_key_salt:
         return _resolve_api_key_principal(api_key)
 
     authorization = request.headers.get("Authorization")
