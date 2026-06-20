@@ -64,10 +64,7 @@ async def _check_postgres(database_url: str, timeout_seconds: float) -> bool:
     import asyncpg
 
     try:
-        conn = await asyncio.wait_for(
-            asyncpg.connect(database_url),
-            timeout=timeout_seconds,
-        )
+        conn = await asyncpg.connect(database_url, timeout=timeout_seconds)
         try:
             await conn.execute("SELECT 1")
         finally:

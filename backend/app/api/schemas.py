@@ -115,6 +115,7 @@ class RouteResponse(_Strict):
     page_ranges: list[PageRange]
     confidence: list[Confidence]
     fallback: bool
+    rerank_applied: bool = False
     routing_time_ms: Annotated[int, Field(ge=0)]
     rationale: str | None = None
     estimated_token_reduction: Annotated[str, Field(pattern=_TOKEN_REDUCTION_PATTERN)] | None = None

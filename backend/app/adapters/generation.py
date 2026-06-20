@@ -140,8 +140,13 @@ class ClaudeGenerationLLM:
         client = await self._ensure_client()
         context = _build_context(sections)
         user_message = (
-            f"Question:\n{query}\n\nRouted sections:\n{context}\n\n"
-            "Answer the question grounded in these sections."
+            "<question>\n"
+            f"{query}\n"
+            "</question>\n\n"
+            "<routed_sections>\n"
+            f"{context}\n"
+            "</routed_sections>\n\n"
+            "Answer the question using only the information in the routed sections above."
         )
         try:
             async with client.messages.stream(  # type: ignore[attr-defined]

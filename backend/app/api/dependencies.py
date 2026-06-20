@@ -101,15 +101,9 @@ def _ingestor_singleton() -> Ingestor:
                 settings = get_settings()
                 sync_url = settings.database_sync_url
                 if not sync_url and settings.database_url:
-                    import re as _re
-                    raw_url = settings.database_url
-                    sync_url = _re.sub(
-                        r"^postgresql(\+asyncpg)?://",
-                        "postgresql+psycopg://",
-                        raw_url,
-                    )
-                    if sync_url == raw_url and not raw_url.startswith("postgresql+psycopg://"):
-                        sync_url = "postgresql+psycopg://" + raw_url.split("://", 1)[-1]
+                    from sqlalchemy.engine.url import make_url as _make_url
+                    _parsed = _make_url(settings.database_url)
+                    sync_url = str(_parsed.set(drivername="postgresql+psycopg"))
                 if not sync_url:
                     raise service_unavailable("The ingestion section store is not configured.")
                 _ingestor_cache = PipelineIngestor(

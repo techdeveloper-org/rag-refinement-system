@@ -138,6 +138,7 @@ async def route_query(
         page_ranges=page_ranges,
         confidence=confidences,
         fallback=decision.fallback,
+        rerank_applied=False,
         routing_time_ms=decision.routing_time_ms,
         rationale=decision.rationale,
         estimated_token_reduction=estimate_token_reduction(

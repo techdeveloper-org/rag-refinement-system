@@ -104,6 +104,12 @@ class ApiKeyStore:
     Only digests are held; the plaintext key is supplied at registration time,
     hashed immediately, and discarded. Replaced production stores back this
     with Postgres but expose the same interface.
+
+    **Multi-replica limitation:** This store lives entirely in process memory. In a
+    multi-replica deployment (e.g. Kubernetes with replicas > 1) each pod holds its
+    own independent store, so a key registered against one replica is invisible to
+    the others. For production multi-replica deployments, replace this class with a
+    database-backed implementation that reads key digests from Postgres.
     """
 
     def __init__(self, salt: str) -> None:
@@ -114,6 +120,7 @@ class ApiKeyStore:
         """
         self._salt = salt
         self._records: dict[str, ApiKeyRecord] = {}
+        self._lock = threading.Lock()
 
     def register(self, plaintext_key: str, tenant_id: str, subject: str) -> None:
         """Register a new key by storing only its salted digest.
@@ -124,9 +131,10 @@ class ApiKeyStore:
             subject: Stable key identifier.
         """
         digest = hash_api_key(plaintext_key, self._salt)
-        self._records[digest] = ApiKeyRecord(
-            key_hash=digest, tenant_id=tenant_id, subject=subject, active=True
-        )
+        with self._lock:
+            self._records[digest] = ApiKeyRecord(
+                key_hash=digest, tenant_id=tenant_id, subject=subject, active=True
+            )
 
     def rotate(self, old_plaintext_key: str, new_plaintext_key: str) -> None:
         """Rotate a key: deactivate the old digest, register the new one.
@@ -139,11 +147,15 @@ class ApiKeyStore:
             ValueError: If the old key is not registered.
         """
         old_digest = hash_api_key(old_plaintext_key, self._salt)
-        record = self._records.get(old_digest)
-        if record is None:
-            raise ValueError("API key is not registered.")
-        del self._records[old_digest]
-        self.register(new_plaintext_key, record.tenant_id, record.subject)
+        new_digest = hash_api_key(new_plaintext_key, self._salt)
+        with self._lock:
+            record = self._records.get(old_digest)
+            if record is None:
+                raise ValueError("API key is not registered.")
+            del self._records[old_digest]
+            self._records[new_digest] = ApiKeyRecord(
+                key_hash=new_digest, tenant_id=record.tenant_id, subject=record.subject, active=True
+            )
 
     def resolve(self, plaintext_key: str) -> ApiKeyRecord | None:
         """Resolve an active key record from a presented plaintext key.
@@ -159,9 +171,10 @@ class ApiKeyStore:
         """
         digest = hash_api_key(plaintext_key, self._salt)
         found: ApiKeyRecord | None = None
-        for record in self._records.values():
-            if hmac.compare_digest(digest, record.key_hash) and record.active:
-                found = record
+        with self._lock:
+            for record in self._records.values():
+                if hmac.compare_digest(digest, record.key_hash) and record.active:
+                    found = record
         return found
 
 
@@ -210,6 +223,10 @@ def _decode_jwt(token: str, settings: Settings) -> dict[str, object]:
     """
     if not settings.jwt_secret:
         raise unauthorized("Bearer authentication is not configured.")
+    if not settings.jwt_issuer:
+        raise unauthorized(
+            "Bearer authentication requires JWT_ISSUER to be configured."
+        )
     try:
         required_claims = ["exp", "sub"]
         if settings.jwt_issuer:
@@ -306,7 +323,9 @@ def resolve_principal(request: Request, settings: Settings) -> Principal:
         ProblemException: 401 when no valid credential is present.
     """
     api_key = request.headers.get("X-API-Key")
-    if api_key and settings.api_key_salt:
+    if api_key:
+        if not settings.api_key_salt:
+            raise unauthorized("API key authentication is not configured.")
         return _resolve_api_key_principal(api_key)
 
     authorization = request.headers.get("Authorization")

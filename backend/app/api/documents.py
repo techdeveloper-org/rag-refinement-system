@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import datetime as _dt
 import math
+import os
+import re
 
 from typing import Annotated
 
@@ -206,12 +208,16 @@ async def ingest_document(
     content = await _read_capped(file, get_settings().max_upload_bytes)
     if not content:
         raise validation_error(errors=[{"field": "file", "message": "file is empty"}])
+    if not content.startswith(b"%PDF-"):
+        raise unsupported_media_type("The uploaded file does not appear to be a valid PDF.")
 
     try:
+        raw_name = file.filename or "upload.pdf"
+        safe_name = re.sub(r"[^A-Za-z0-9._\-]", "_", os.path.basename(raw_name))[:255] or "upload.pdf"
         outcome = await ingestor.ingest_document(
             tenant_id=principal.tenant_id,
             content=content,
-            filename=file.filename or "upload.pdf",
+            filename=safe_name,
             title=title,
             domain=domain,
             no_retention=no_retention,

@@ -25,6 +25,7 @@ from dataclasses import dataclass
 
 from qdrant_client import QdrantClient
 from qdrant_client import models as qm
+from qdrant_client.http.exceptions import UnexpectedResponse
 
 logger = logging.getLogger(__name__)
 
@@ -117,12 +118,15 @@ def ensure_payload_indexes(
                 field_name=field,
                 field_schema=qm.PayloadSchemaType.KEYWORD,
             )
-        except Exception as exc:
-            logger.debug(
-                "payload index for %r already present (idempotent ensure): %s",
-                field,
-                exc,
-            )
+        except UnexpectedResponse as exc:
+            if exc.status_code in (400, 409):
+                logger.debug(
+                    "payload index for %r already present (idempotent ensure): %s",
+                    field,
+                    exc,
+                )
+            else:
+                raise
     return PAYLOAD_INDEX_FIELDS
 
 

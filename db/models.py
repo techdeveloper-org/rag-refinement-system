@@ -38,7 +38,6 @@ from sqlalchemy import (
     Index,
     Integer,
     Text,
-    UniqueConstraint,
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -118,7 +117,13 @@ class Document(Base):
 
     __table_args__ = (
         CheckConstraint("total_pages >= 0", name="documents_total_pages_nonneg"),
-        UniqueConstraint("tenant_id", "content_hash", name="uq_documents_tenant_content_hash"),
+        Index(
+            "uq_documents_tenant_hash",
+            "tenant_id",
+            "content_hash",
+            unique=True,
+            postgresql_where=content_hash.isnot(None),
+        ),
         Index("idx_documents_tenant_id", "tenant_id"),
         Index("idx_documents_domain", "domain"),
         Index(
@@ -165,7 +170,7 @@ class Section(Base):
     document: Mapped[Document] = relationship(back_populates="sections")
 
     __table_args__ = (
-        CheckConstraint("level >= 0", name="sections_level_nonneg"),
+        CheckConstraint("level >= 1", name="sections_level_nonneg"),
         CheckConstraint("page_start >= 1", name="sections_page_start_positive"),
         CheckConstraint(
             "page_start <= page_end", name="sections_page_range_valid"
@@ -189,7 +194,7 @@ class ErasureOutbox(Base):
     outbox_id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     doc_id: Mapped[str] = mapped_column(
         Text,
-        ForeignKey("documents.doc_id", ondelete="CASCADE"),
+        ForeignKey("documents.doc_id", ondelete="RESTRICT"),
         nullable=False,
     )
     tenant_id: Mapped[str] = mapped_column(Text, nullable=False)

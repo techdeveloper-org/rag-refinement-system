@@ -50,7 +50,7 @@ services:
       - no-new-privileges:true
 
   qdrant:
-    image: qdrant/qdrant:latest
+    image: qdrant/qdrant:v1.11.0
     restart: unless-stopped
     environment:
       # Qdrant API-key auth (production). Reject anonymous access (ADR-2 store hardening,

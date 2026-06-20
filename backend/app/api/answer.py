@@ -142,17 +142,16 @@ async def _answer_stream(
         yield _sse_event("final", final.model_dump(exclude_none=True))
     except DependencyUnavailable as exc:
         problem = service_unavailable(
-            exc.args[0] if exc.args and exc.args[0] else "Generation dependency unavailable."
+            exc.args[0] if exc.args and exc.args[0] else "Generation dependency unavailable.",
+            query_id=query_id,
         )
-        problem.query_id = query_id
         yield _sse_event("error", problem.to_problem())
     except asyncio.CancelledError:
         _logger.info("answer stream cancelled (client disconnect); query_id=%s", query_id)
         raise
     except Exception:  # noqa: BLE001 - mid-stream failures become an SSE error event
         _logger.exception("unhandled error in answer stream; query_id=%s", query_id)
-        problem = internal_error()
-        problem.query_id = query_id
+        problem = internal_error(query_id=query_id)
         yield _sse_event("error", problem.to_problem())
 
 
@@ -200,8 +199,8 @@ async def answer_query(
     if document.fallback_only:
         # TODO: product owner to confirm — Option B (whole-document RAG) may replace this
         raise validation_error(
-            detail="This document was indexed in fallback mode and does not support section-level routing.",
-            errors=[{"field": "document_id", "message": "fallback-only document"}],
+            detail="This document does not support section-level routing. Use full-document retrieval instead.",
+            errors=[{"field": "document_id", "message": "document does not support section-level routing"}],
         )
 
     try:
