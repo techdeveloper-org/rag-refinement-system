@@ -1,0 +1,89 @@
+{
+  "$comment": "Phase 6 (TODO-07) Sprint Planning verdict. Consensus BINARY gate (SPRINT READY). 100% FR->story coverage, Sprint-1 SP <= capacity*0.95, DoD AHP CR < 0.10, open_items = 0. No GitHub/network calls were made - the issues manifest is LOCAL and ready-to-create only. Source: backlog.md, sprint_1_backlog.md, fr_story_traceability.json, github_issues_manifest.json, sprint_agent_briefs.json.",
+  "generated": "2026-06-06",
+  "phase": "6",
+  "gate": "SPRINT READY; 100% FR->story",
+  "verdict": "SPRINT READY",
+  "consensus": "APPROVED",
+  "fr_story_coverage_pct": 100.0,
+  "fr_total": 29,
+  "fr_covered": 29,
+  "epic_count": 8,
+  "story_count": 38,
+  "sprint1_story_count": 11,
+  "sprint1_sp": 39,
+  "capacity_sp": 42,
+  "capacity_ceiling_95pct": 39.9,
+  "sprint1_within_ceiling": true,
+  "sprint1_utilization_pct": 92.9,
+  "dod_ahp_cr": 0.00763,
+  "dod_ahp_cr_threshold": 0.10,
+  "dod_ahp_consistent": true,
+  "dod_ahp_weights": {
+    "CI-green": 0.2395,
+    "AC-passes": 0.4327,
+    "compliance": 0.2395,
+    "traceability": 0.0883
+  },
+  "open_items": 0,
+  "pert_method": "E = (O + 4M + P) / 6; SP = nearest Fibonacci to E; SD = (P - O) / 6.",
+  "capacity_method": "5 engineers x ~8.4 SP/engineer (greenfield Sprint-1 velocity estimate) = 42 SP gross; commitment ceiling = 42 x 0.95 = 39.9 SP.",
+  "sprint_goal": "Stand up a deployable, authenticated, tenant-isolated ingestion-and-routing thin slice (upload -> TOC -> chunk -> embed -> store -> route) on CI-gated, health-checked services with DPDP x-pii data-access in place from day one.",
+  "foundation_stories": [
+    "STORY-001 (Postgres schema)",
+    "STORY-038 (auth/tenant substrate)",
+    "STORY-002 (Qdrant payload)",
+    "STORY-004 (Docker + health/ready)",
+    "STORY-005 (CI + SAST/secrets gate)",
+    "STORY-008 (upload + extract)",
+    "STORY-009 (native TOC)",
+    "STORY-003 (embed + upsert)",
+    "STORY-011 (section-aware chunking, P0-risk)",
+    "STORY-014 (LangGraph router, P0-risk)",
+    "STORY-034 (DPDP access + x-pii, FR-029 auto-created)"
+  ],
+  "auto_created_compliance": {
+    "dpdp_fr029_xpii": {
+      "story": "STORY-034",
+      "in_sprint1": true,
+      "rationale": "Sprint 1 ingests and stores document PII, so the DPDP x-pii access path (FR-029) + data-access export (FR-026) is auto-created into Sprint 1."
+    },
+    "cert_in_6h_hook": {
+      "story": "STORY-037",
+      "in_sprint1": false,
+      "substrate_in_sprint1": ["STORY-005 (SAST/secrets security gate)", "STORY-038 (audit-logging substrate)"],
+      "rationale": "Full CERT-In 6-hour incident-reporting hook (5 SP) scheduled Sprint 2 to respect the 95% capacity ceiling; its security-scanning and audit-logging substrate lands in Sprint 1 so no PII is processed without a security gate and audit trail. NEEDS USER DECISION (see open_decisions)."
+    }
+  },
+  "github_calls_made": false,
+  "github_action": "MANIFEST ONLY - github_issues_manifest.json is local and ready-to-create. No gh CLI, no GitHub MCP, no API call was invoked. Creation is deferred to explicit user approval.",
+  "artifacts": [
+    "docs/phase-6-sprint-planning/backlog.md",
+    "docs/phase-6-sprint-planning/sprint_1_backlog.md",
+    "docs/phase-6-sprint-planning/github_issues_manifest.json",
+    "docs/phase-6-sprint-planning/fr_story_traceability.json",
+    "docs/phase-6-sprint-planning/sprint_agent_briefs.json",
+    "docs/phase-6-sprint-planning/sprint_verdict.json"
+  ],
+  "open_decisions": [
+    {
+      "id": "DEC-1",
+      "topic": "CERT-In 6-hour incident-reporting hook (STORY-037) sprint placement",
+      "question": "Pull the full CERT-In hook into Sprint 1 (raises commitment over the 39.9 SP ceiling, would require dropping a foundation story), or keep it Sprint 2 with only its audit/security substrate in Sprint 1?",
+      "recommended_default": "Sprint 2 (substrate-only in Sprint 1). Sprint 1 already lands the secrets/SAST gate (STORY-005) and audit-logging substrate (STORY-038); no PII flows without a security gate. Pulling the full 5-SP hook into Sprint 1 would breach the 95% capacity ceiling or evict the P0 router/chunking work."
+    },
+    {
+      "id": "DEC-2",
+      "topic": "Greenfield velocity assumption (42 SP capacity)",
+      "question": "Confirm the ~8.4 SP/engineer first-sprint velocity, or set a more conservative figure?",
+      "recommended_default": "Accept 42 SP for Sprint 1; recalibrate from Sprint 1 actuals before Sprint 2. The 95% ceiling already absorbs greenfield uncertainty."
+    },
+    {
+      "id": "DEC-3",
+      "topic": "GitHub issue creation",
+      "question": "Create the 11 Sprint-1 issues + labels + 'Sprint 1' milestone from github_issues_manifest.json on the techdeveloper-org repo now?",
+      "recommended_default": "Do NOT create yet. The GitHub MCP is not connected and issue creation is an outward-facing action; hold at the STOP point for explicit user approval. Manifest is ready to apply on approval."
+    }
+  ],
+  "stop_point": "User reviews sprint board (manifest). Status set to awaiting_user in ledger.json per checkpoint protocol."
+}

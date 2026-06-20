@@ -1,0 +1,351 @@
+{
+  "$comment": "Phase 6 (TODO-07) GitHub Issues MANIFEST. LOCAL ONLY - no gh/API call was made. Ready to create later after user approval. One issue per Sprint-1 story (11). Source: backlog.md, sprint_1_backlog.md, SRS.md. Target repo: techdeveloper-org (existing). DO NOT create until user approves.",
+  "generated": "2026-06-06",
+  "phase": "6",
+  "github_calls_made": false,
+  "create_when": "user-approved",
+  "target_repo": "techdeveloper-org/<rag-refinement-system repo>",
+  "label_taxonomy": {
+    "epic": [
+      {
+        "name": "epic:sto",
+        "color": "0e8a16",
+        "description": "Storage & Data Model (foundation)"
+      },
+      {
+        "name": "epic:ops",
+        "color": "5319e7",
+        "description": "Observability & Ops (foundation)"
+      },
+      {
+        "name": "epic:ing",
+        "color": "1d76db",
+        "description": "Ingestion"
+      },
+      {
+        "name": "epic:rtr",
+        "color": "d93f0b",
+        "description": "Router"
+      },
+      {
+        "name": "epic:rag",
+        "color": "fbca04",
+        "description": "Retrieval & Generation"
+      },
+      {
+        "name": "epic:api",
+        "color": "006b75",
+        "description": "Enterprise API"
+      },
+      {
+        "name": "epic:fe",
+        "color": "c2e0c6",
+        "description": "Frontend (personal tool)"
+      },
+      {
+        "name": "epic:sec",
+        "color": "b60205",
+        "description": "Security & Compliance (DPDP/CERT-In)"
+      }
+    ],
+    "type": [
+      {
+        "name": "type:feature",
+        "color": "a2eeef",
+        "description": "User-facing feature story"
+      },
+      {
+        "name": "type:infra",
+        "color": "bfd4f2",
+        "description": "Infrastructure / ops / CI story"
+      },
+      {
+        "name": "type:security",
+        "color": "e11d21",
+        "description": "Security / compliance story"
+      },
+      {
+        "name": "type:bug",
+        "color": "d73a4a",
+        "description": "Defect"
+      },
+      {
+        "name": "type:chore",
+        "color": "cfd3d7",
+        "description": "Maintenance / refactor"
+      }
+    ],
+    "priority": [
+      {
+        "name": "priority:high",
+        "color": "b60205",
+        "description": "WSJF-high / foundation / P0-risk"
+      },
+      {
+        "name": "priority:medium",
+        "color": "fbca04",
+        "description": "P1"
+      },
+      {
+        "name": "priority:low",
+        "color": "0e8a16",
+        "description": "P2"
+      }
+    ],
+    "sprint": [
+      {
+        "name": "sprint:sprint-1",
+        "color": "5319e7",
+        "description": "Committed to Sprint 1"
+      }
+    ]
+  },
+  "milestones": [
+    {
+      "title": "Sprint 1",
+      "state": "open",
+      "description": "Foundation thin-slice + mandated data-handling compliance substrate. Goal: deployable, authenticated, tenant-isolated ingestion-and-routing slice (upload -> TOC -> chunk -> embed -> store -> route) with DPDP x-pii access. 11 issues, 39 SP committed vs 39.9 SP ceiling (42 SP capacity).",
+      "due_on": null
+    }
+  ],
+  "issues": [
+    {
+      "story_id": "STORY-001",
+      "title": "[STORY-001] PostgreSQL structure schema + migrations",
+      "labels": [
+        "epic:sto",
+        "type:feature",
+        "priority:high",
+        "sprint:sprint-1"
+      ],
+      "milestone": "Sprint 1",
+      "epic": "EPIC-STO",
+      "story_points": 3,
+      "wsjf": 8.0,
+      "fr_refs": [
+        "FR-003",
+        "FR-024"
+      ],
+      "ac_refs": [
+        "AC-003",
+        "AC-024"
+      ],
+      "body": "## Story STORY-001\n\n**Epic:** EPIC-STO\n**As a** backend engineer **I want** the documents and sections tables (L1/L2 hierarchy, tenant_id, page_start/page_end, summary) with versioned migrations **so that** the router and document-management surfaces have an ACID structure store (ADR-10).\n\n### Linked requirements\n- **SRS-FR / NFR:** FR-003, FR-024\n- **Acceptance criteria (SRS):** AC-003, AC-024\n\n### Acceptance criteria\nThis story is accepted when the SRS acceptance criterion (AC-003, AC-024) passes with the global DoD satisfied. See `SRS.md` Section 4 for the exact AC text.\n\n### Estimation\n- **WSJF (CoD / Job-Size):** 8.0\n- **PERT 3-point (ideal-days):** O=2 / M=3 / P=6 -> E=3.3\n- **Story Points (Fibonacci):** 3\n\n### Definition of Done\nGlobal DoD (see `docs/phase-6-sprint-planning/backlog.md` Section 1.3) plus:\n- Forward + rollback migrations. snake_case tables/columns. tenant_id on every row. Postgres is the structure store (ADR-10); Qdrant holds chunk vectors separately.\n- Story -> SRS-FR -> AC traceability recorded in `fr_story_traceability.json`.\n\n> Source of truth: SRS.md, openapi.yaml (do-not-modify), HLD, AGREED CONTRACTS. This issue body is a MANIFEST entry generated in Phase 6 - not yet created on GitHub.\n"
+    },
+    {
+      "story_id": "STORY-038",
+      "title": "[STORY-038] Auth: API keys (rotation) + OAuth2/JWT (personal) + tenant substrate",
+      "labels": [
+        "epic:sec",
+        "type:security",
+        "priority:high",
+        "sprint:sprint-1"
+      ],
+      "milestone": "Sprint 1",
+      "epic": "EPIC-SEC",
+      "story_points": 5,
+      "wsjf": 6.0,
+      "fr_refs": [
+        "NFR-015"
+      ],
+      "ac_refs": [
+        "AC-024"
+      ],
+      "body": "## Story STORY-038\n\n**Epic:** EPIC-SEC\n**As a** platform owner **I want** API-key auth with rotation for the enterprise API and OAuth2/JWT bearer for the personal tool, plus the tenant_id scoping path **so that** both product surfaces are authenticated and tenant isolation is enforceable (ADR-7, SRS-NFR-015).\n\n### Linked requirements\n- **SRS-FR / NFR:** NFR-015\n- **Acceptance criteria (SRS):** AC-024\n\n### Acceptance criteria\nThis story is accepted when the SRS acceptance criterion (AC-024) passes with the global DoD satisfied. See `SRS.md` Section 4 for the exact AC text.\n\n### Estimation\n- **WSJF (CoD / Job-Size):** 6.0\n- **PERT 3-point (ideal-days):** O=2 / M=4 / P=7 -> E=4.2\n- **Story Points (Fibonacci):** 5\n\n### Definition of Done\nGlobal DoD (see `docs/phase-6-sprint-planning/backlog.md` Section 1.3) plus:\n- API-key rotation; JWT validation; rate-limit on authenticated ops (ADV-003); session-fixation review hook; audit-logging substrate begins here (CERT-In/IT Act). No secrets in repo.\n- Story -> SRS-FR -> AC traceability recorded in `fr_story_traceability.json`.\n\n> Source of truth: SRS.md, openapi.yaml (do-not-modify), HLD, AGREED CONTRACTS. This issue body is a MANIFEST entry generated in Phase 6 - not yet created on GitHub.\n"
+    },
+    {
+      "story_id": "STORY-002",
+      "title": "[STORY-002] Qdrant collection + payload schema (chunk vectors)",
+      "labels": [
+        "epic:sto",
+        "type:feature",
+        "priority:high",
+        "sprint:sprint-1"
+      ],
+      "milestone": "Sprint 1",
+      "epic": "EPIC-STO",
+      "story_points": 3,
+      "wsjf": 5.3,
+      "fr_refs": [
+        "FR-004"
+      ],
+      "ac_refs": [
+        "AC-004"
+      ],
+      "body": "## Story STORY-002\n\n**Epic:** EPIC-STO\n**As a** data engineer **I want** the Qdrant collection provisioned with payload {chunk_id, section_id, doc_id, page, tenant_id} and a section_id/tenant_id payload index **so that** targeted retrieval can filter by section and tenant (ADR-2).\n\n### Linked requirements\n- **SRS-FR / NFR:** FR-004\n- **Acceptance criteria (SRS):** AC-004\n\n### Acceptance criteria\nThis story is accepted when the SRS acceptance criterion (AC-004) passes with the global DoD satisfied. See `SRS.md` Section 4 for the exact AC text.\n\n### Estimation\n- **WSJF (CoD / Job-Size):** 5.3\n- **PERT 3-point (ideal-days):** O=2 / M=3 / P=5 -> E=3.2\n- **Story Points (Fibonacci):** 3\n\n### Definition of Done\nGlobal DoD (see `docs/phase-6-sprint-planning/backlog.md` Section 1.3) plus:\n- Payload index on section_id and tenant_id. dev=ChromaDB / prod=Qdrant parity documented.\n- Story -> SRS-FR -> AC traceability recorded in `fr_story_traceability.json`.\n\n> Source of truth: SRS.md, openapi.yaml (do-not-modify), HLD, AGREED CONTRACTS. This issue body is a MANIFEST entry generated in Phase 6 - not yet created on GitHub.\n"
+    },
+    {
+      "story_id": "STORY-004",
+      "title": "[STORY-004] Service skeleton: Dockerfile + /health + /ready",
+      "labels": [
+        "epic:ops",
+        "type:infra",
+        "priority:high",
+        "sprint:sprint-1"
+      ],
+      "milestone": "Sprint 1",
+      "epic": "EPIC-OPS",
+      "story_points": 2,
+      "wsjf": 7.3,
+      "fr_refs": [
+        "NFR-009"
+      ],
+      "ac_refs": [
+        "NFR-009 (HLD 9)"
+      ],
+      "body": "## Story STORY-004\n\n**Epic:** EPIC-OPS\n**As a** devops engineer **I want** each service to ship a Dockerfile, a liveness /health, and a dependency-reachability /ready **so that** the platform is deployable and degradation is observable (SRS-NFR-009).\n\n### Linked requirements\n- **SRS-FR / NFR:** NFR-009\n- **Acceptance criteria (SRS):** NFR-009 (HLD 9)\n\n### Acceptance criteria\nThis story is accepted when the SRS acceptance criterion (NFR-009 (HLD 9)) passes with the global DoD satisfied. See `SRS.md` Section 4 for the exact AC text.\n\n### Estimation\n- **WSJF (CoD / Job-Size):** 7.3\n- **PERT 3-point (ideal-days):** O=1 / M=2 / P=4 -> E=2.2\n- **Story Points (Fibonacci):** 2\n\n### Definition of Done\nGlobal DoD (see `docs/phase-6-sprint-planning/backlog.md` Section 1.3) plus:\n- /ready returns 503 when a dependency is down (feeds NFR-013 degradation UI).\n- Story -> SRS-FR -> AC traceability recorded in `fr_story_traceability.json`.\n\n> Source of truth: SRS.md, openapi.yaml (do-not-modify), HLD, AGREED CONTRACTS. This issue body is a MANIFEST entry generated in Phase 6 - not yet created on GitHub.\n"
+    },
+    {
+      "story_id": "STORY-005",
+      "title": "[STORY-005] CI pipeline: lint + type + unit + SAST + secrets scan",
+      "labels": [
+        "epic:ops",
+        "type:infra",
+        "priority:high",
+        "sprint:sprint-1"
+      ],
+      "milestone": "Sprint 1",
+      "epic": "EPIC-OPS",
+      "story_points": 2,
+      "wsjf": 7.7,
+      "fr_refs": [
+        "NFR-007",
+        "NFR-010"
+      ],
+      "ac_refs": [
+        "CI blocks on hardcoded key"
+      ],
+      "body": "## Story STORY-005\n\n**Epic:** EPIC-OPS\n**As a** devops engineer **I want** a CI workflow running lint, type-check, unit tests, SAST, and a secrets scan on every push **so that** the quality + security gates block bad merges (AGREED CONTRACT devops + sast/secrets).\n\n### Linked requirements\n- **SRS-FR / NFR:** NFR-007, NFR-010\n- **Acceptance criteria (SRS):** CI blocks on hardcoded key\n\n### Acceptance criteria\nThis story is accepted when the SRS acceptance criterion (CI blocks on hardcoded key) passes with the global DoD satisfied. See `SRS.md` Section 4 for the exact AC text.\n\n### Estimation\n- **WSJF (CoD / Job-Size):** 7.7\n- **PERT 3-point (ideal-days):** O=1 / M=2 / P=5 -> E=2.3\n- **Story Points (Fibonacci):** 2\n\n### Definition of Done\nGlobal DoD (see `docs/phase-6-sprint-planning/backlog.md` Section 1.3) plus:\n- SAST + secrets scan block on finding. Python + TS stacks. RFC-7807 contract test hook.\n- Story -> SRS-FR -> AC traceability recorded in `fr_story_traceability.json`.\n\n> Source of truth: SRS.md, openapi.yaml (do-not-modify), HLD, AGREED CONTRACTS. This issue body is a MANIFEST entry generated in Phase 6 - not yet created on GitHub.\n"
+    },
+    {
+      "story_id": "STORY-008",
+      "title": "[STORY-008] PDF upload + text/structure extraction (POST /v1/documents)",
+      "labels": [
+        "epic:ing",
+        "type:feature",
+        "priority:high",
+        "sprint:sprint-1"
+      ],
+      "milestone": "Sprint 1",
+      "epic": "EPIC-ING",
+      "story_points": 3,
+      "wsjf": 7.0,
+      "fr_refs": [
+        "FR-001"
+      ],
+      "ac_refs": [
+        "AC-001"
+      ],
+      "body": "## Story STORY-008\n\n**Epic:** EPIC-ING\n**As a** user **I want** to upload a PDF and have its text + structure extracted **so that** I can ask questions over it; identical re-upload returns the same doc_id (deduplicated).\n\n### Linked requirements\n- **SRS-FR / NFR:** FR-001\n- **Acceptance criteria (SRS):** AC-001\n\n### Acceptance criteria\nThis story is accepted when the SRS acceptance criterion (AC-001) passes with the global DoD satisfied. See `SRS.md` Section 4 for the exact AC text.\n\n### Estimation\n- **WSJF (CoD / Job-Size):** 7.0\n- **PERT 3-point (ideal-days):** O=2 / M=3 / P=5 -> E=3.2\n- **Story Points (Fibonacci):** 3\n\n### Definition of Done\nGlobal DoD (see `docs/phase-6-sprint-planning/backlog.md` Section 1.3) plus:\n- IngestResponse{doc_id, toc, ingest_status, deduplicated}. Idempotent on content hash. ADV-001 traceability header fix in first doc pass.\n- Story -> SRS-FR -> AC traceability recorded in `fr_story_traceability.json`.\n\n> Source of truth: SRS.md, openapi.yaml (do-not-modify), HLD, AGREED CONTRACTS. This issue body is a MANIFEST entry generated in Phase 6 - not yet created on GitHub.\n"
+    },
+    {
+      "story_id": "STORY-009",
+      "title": "[STORY-009] Native TOC extraction (Scenario A, get_toc)",
+      "labels": [
+        "epic:ing",
+        "type:feature",
+        "priority:high",
+        "sprint:sprint-1"
+      ],
+      "milestone": "Sprint 1",
+      "epic": "EPIC-ING",
+      "story_points": 3,
+      "wsjf": 5.4,
+      "fr_refs": [
+        "FR-002"
+      ],
+      "ac_refs": [
+        "AC-002"
+      ],
+      "body": "## Story STORY-009\n\n**Epic:** EPIC-ING\n**As a** user **I want** the native bookmark TOC extracted with level/title/page ranges **so that** the router has the document structure to route over (ADR-4, Scenario A).\n\n### Linked requirements\n- **SRS-FR / NFR:** FR-002\n- **Acceptance criteria (SRS):** AC-002\n\n### Acceptance criteria\nThis story is accepted when the SRS acceptance criterion (AC-002) passes with the global DoD satisfied. See `SRS.md` Section 4 for the exact AC text.\n\n### Estimation\n- **WSJF (CoD / Job-Size):** 5.4\n- **PERT 3-point (ideal-days):** O=2 / M=3 / P=6 -> E=3.3\n- **Story Points (Fibonacci):** 3\n\n### Definition of Done\nGlobal DoD (see `docs/phase-6-sprint-planning/backlog.md` Section 1.3) plus:\n- Bookmark path only this sprint; pseudo-TOC (Scenario B/C) is STORY-010 in Sprint 2.\n- Story -> SRS-FR -> AC traceability recorded in `fr_story_traceability.json`.\n\n> Source of truth: SRS.md, openapi.yaml (do-not-modify), HLD, AGREED CONTRACTS. This issue body is a MANIFEST entry generated in Phase 6 - not yet created on GitHub.\n"
+    },
+    {
+      "story_id": "STORY-003",
+      "title": "[STORY-003] Embedding + upsert pipeline (OpenAI te-3-small)",
+      "labels": [
+        "epic:sto",
+        "type:feature",
+        "priority:high",
+        "sprint:sprint-1"
+      ],
+      "milestone": "Sprint 1",
+      "epic": "EPIC-STO",
+      "story_points": 5,
+      "wsjf": 5.3,
+      "fr_refs": [
+        "FR-004"
+      ],
+      "ac_refs": [
+        "AC-004",
+        "AC-001"
+      ],
+      "body": "## Story STORY-003\n\n**Epic:** EPIC-STO\n**As a** data engineer **I want** chunk embedding (text-embedding-3-small) and idempotent Qdrant upsert keyed on content hash **so that** re-upload reuses doc_id and chunks are indexed exactly once (ADR-6).\n\n### Linked requirements\n- **SRS-FR / NFR:** FR-004\n- **Acceptance criteria (SRS):** AC-004, AC-001\n\n### Acceptance criteria\nThis story is accepted when the SRS acceptance criterion (AC-004, AC-001) passes with the global DoD satisfied. See `SRS.md` Section 4 for the exact AC text.\n\n### Estimation\n- **WSJF (CoD / Job-Size):** 5.3\n- **PERT 3-point (ideal-days):** O=2 / M=4 / P=7 -> E=4.2\n- **Story Points (Fibonacci):** 5\n\n### Definition of Done\nGlobal DoD (see `docs/phase-6-sprint-planning/backlog.md` Section 1.3) plus:\n- Idempotent on content hash. Embedding provider key via env only.\n- Story -> SRS-FR -> AC traceability recorded in `fr_story_traceability.json`.\n\n> Source of truth: SRS.md, openapi.yaml (do-not-modify), HLD, AGREED CONTRACTS. This issue body is a MANIFEST entry generated in Phase 6 - not yet created on GitHub.\n"
+    },
+    {
+      "story_id": "STORY-011",
+      "title": "[STORY-011] Section-aware 3-level chunking (no cross-section chunks)",
+      "labels": [
+        "epic:ing",
+        "type:feature",
+        "priority:high",
+        "sprint:sprint-1"
+      ],
+      "milestone": "Sprint 1",
+      "epic": "EPIC-ING",
+      "story_points": 5,
+      "wsjf": 5.5,
+      "fr_refs": [
+        "FR-003"
+      ],
+      "ac_refs": [
+        "AC-003"
+      ],
+      "body": "## Story STORY-011\n\n**Epic:** EPIC-ING\n**As a** data engineer **I want** Document->Section->Chunk chunking where no chunk crosses a section boundary **so that** every chunk carries exactly one section_id for clean targeted retrieval.\n\n### Linked requirements\n- **SRS-FR / NFR:** FR-003\n- **Acceptance criteria (SRS):** AC-003\n\n### Acceptance criteria\nThis story is accepted when the SRS acceptance criterion (AC-003) passes with the global DoD satisfied. See `SRS.md` Section 4 for the exact AC text.\n\n### Estimation\n- **WSJF (CoD / Job-Size):** 5.5\n- **PERT 3-point (ideal-days):** O=2 / M=4 / P=7 -> E=4.2\n- **Story Points (Fibonacci):** 5\n\n### Definition of Done\nGlobal DoD (see `docs/phase-6-sprint-planning/backlog.md` Section 1.3) plus:\n- P0-RISK. Deterministic golden fixtures. No chunk spans two sections.\n- Story -> SRS-FR -> AC traceability recorded in `fr_story_traceability.json`.\n\n> Source of truth: SRS.md, openapi.yaml (do-not-modify), HLD, AGREED CONTRACTS. This issue body is a MANIFEST entry generated in Phase 6 - not yet created on GitHub.\n"
+    },
+    {
+      "story_id": "STORY-014",
+      "title": "[STORY-014] LangGraph router node (Claude 3 Haiku, RouterOutput contract)",
+      "labels": [
+        "epic:rtr",
+        "type:feature",
+        "priority:high",
+        "sprint:sprint-1"
+      ],
+      "milestone": "Sprint 1",
+      "epic": "EPIC-RTR",
+      "story_points": 5,
+      "wsjf": 5.8,
+      "fr_refs": [
+        "FR-005",
+        "NFR-008"
+      ],
+      "ac_refs": [
+        "AC-005"
+      ],
+      "body": "## Story STORY-014\n\n**Epic:** EPIC-RTR\n**As a** AI engineer **I want** a LangGraph router emitting {relevant_sections[], page_ranges[], confidence[], fallback, routing_time_ms} validated against the RouterOutput contract **so that** queries are scoped to sections before search (ADR-1/ADR-3, HLD 7.1).\n\n### Linked requirements\n- **SRS-FR / NFR:** FR-005, NFR-008\n- **Acceptance criteria (SRS):** AC-005\n\n### Acceptance criteria\nThis story is accepted when the SRS acceptance criterion (AC-005) passes with the global DoD satisfied. See `SRS.md` Section 4 for the exact AC text.\n\n### Estimation\n- **WSJF (CoD / Job-Size):** 5.8\n- **PERT 3-point (ideal-days):** O=3 / M=5 / P=9 -> E=5.3\n- **Story Points (Fibonacci):** 5\n\n### Definition of Done\nGlobal DoD (see `docs/phase-6-sprint-planning/backlog.md` Section 1.3) plus:\n- P0-RISK. Golden TOC fixtures. LLM response rejected if non-conforming -> deterministic fallback (ADV-004, OWASP-LLM01). routing_time_ms in [100,300] (SRS-NFR-001).\n- Story -> SRS-FR -> AC traceability recorded in `fr_story_traceability.json`.\n\n> Source of truth: SRS.md, openapi.yaml (do-not-modify), HLD, AGREED CONTRACTS. This issue body is a MANIFEST entry generated in Phase 6 - not yet created on GitHub.\n"
+    },
+    {
+      "story_id": "STORY-034",
+      "title": "[STORY-034] DPDP access: GET /v1/documents/{id}/data + x-pii inventory",
+      "labels": [
+        "epic:sec",
+        "type:security",
+        "priority:high",
+        "sprint:sprint-1"
+      ],
+      "milestone": "Sprint 1",
+      "epic": "EPIC-SEC",
+      "story_points": 3,
+      "wsjf": 6.0,
+      "fr_refs": [
+        "FR-026",
+        "FR-029"
+      ],
+      "ac_refs": [
+        "AC-026",
+        "AC-029"
+      ],
+      "body": "## Story STORY-034\n\n**Epic:** EPIC-SEC\n**As a** data subject **I want** GET /v1/documents/{id}/data to return the personal data held plus an x-pii field inventory **so that** my right to access (DPDP Section 8) and PII transparency (DPDP Section 4) are honored (HLD 7.4).\n\n### Linked requirements\n- **SRS-FR / NFR:** FR-026, FR-029\n- **Acceptance criteria (SRS):** AC-026, AC-029\n\n### Acceptance criteria\nThis story is accepted when the SRS acceptance criterion (AC-026, AC-029) passes with the global DoD satisfied. See `SRS.md` Section 4 for the exact AC text.\n\n### Estimation\n- **WSJF (CoD / Job-Size):** 6.0\n- **PERT 3-point (ideal-days):** O=2 / M=3 / P=5 -> E=3.2\n- **Story Points (Fibonacci):** 3\n\n### Definition of Done\nGlobal DoD (see `docs/phase-6-sprint-planning/backlog.md` Section 1.3) plus:\n- AUTO-CREATED into Sprint 1 (data-handling). DataAccessExport.pii_fields[] enumerates x-pii fields; x-pii annotated in schema consumption.\n- Story -> SRS-FR -> AC traceability recorded in `fr_story_traceability.json`.\n\n> Source of truth: SRS.md, openapi.yaml (do-not-modify), HLD, AGREED CONTRACTS. This issue body is a MANIFEST entry generated in Phase 6 - not yet created on GitHub.\n"
+    }
+  ]
+}

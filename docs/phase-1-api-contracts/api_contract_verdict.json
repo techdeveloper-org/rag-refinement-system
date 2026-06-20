@@ -1,0 +1,61 @@
+{
+  "$comment": "Consensus BINARY gate verdict for Phase 1.5 (TODO-02) API contract.",
+  "artifact": "docs/phase-1-api-contracts/openapi.yaml",
+  "reviewer": "consensus-agent",
+  "gate_type": "BINARY",
+  "verdict": "APPROVED",
+  "rounds": 2,
+  "fr_coverage_pct": 100.0,
+  "open_items": 0,
+  "generated": "2026-06-06",
+  "checks": {
+    "valid_yaml_openapi_3_1_0": true,
+    "broken_refs": 0,
+    "operation_ids_unique": true,
+    "operation_count": 10,
+    "path_count": 8,
+    "every_op_has_request_when_body_and_response": true,
+    "every_op_has_min_2_errors_incl_4xx_and_500": true,
+    "list_endpoints_paginated": true,
+    "versioning_and_deprecation_documented": true,
+    "rfc7807_problem_json_on_all_errors": true,
+    "fr_to_operationid_coverage_100pct": true,
+    "security_schemes_apiKey_and_bearer": true,
+    "dpdp_x_pii_annotations": 14,
+    "certin_x_audit_log_annotations": 6,
+    "x_rate_limit_annotations": 3,
+    "error_catalog_codes_match_spec": true
+  },
+  "rounds_detail": [
+    {
+      "round": 1,
+      "verdict": "REJECTED",
+      "issues_found_and_fixed": [
+        "openapi.yaml failed to parse: unquoted descriptions containing 'event: token' / 'event: final' were read by the YAML scanner as nested mappings (ScannerError line 814). -> Quoted both SSE description strings.",
+        "Confirmed (pre-fix sweep) that all error responses route through shared problem+json response components and the error_catalog codes exactly match the spec's Problem.code values."
+      ]
+    },
+    {
+      "round": 2,
+      "verdict": "APPROVED",
+      "verification": [
+        "YAML parses as OpenAPI 3.1.0; 0 broken $refs across 116 reference uses.",
+        "10 unique operationIds over 8 paths; every operation has request body (where applicable) + >=1 2xx + >=1 4xx + 500 (operations probes /health,/ready exempt from 4xx by design).",
+        "GET /v1/documents paginates via DocumentListResponse + Pagination envelope.",
+        "Versioning (URL-path v1, semver doc) + 180-day deprecation/Sunset policy documented in info.description.",
+        "All 10 shared error responses use application/problem+json (RFC-7807).",
+        "All 29 PRD FRs accounted: 23 mapped to >=1 operationId, 6 marked non-API with reason -> 100% coverage.",
+        "securitySchemes: apiKey (enterprise) + bearerAuth/JWT (personal) + oauth2 flow.",
+        "DPDP: 14 x-pii field annotations + erasure (deleteDocument) + access (exportDocumentData); CERT-In: 6 x-audit-log write ops; 3 x-rate-limit annotations.",
+        "/v1/route is routing-only (no generation path); /v1/answer streams SSE; section_id is the universal key across schemas."
+      ]
+    }
+  ],
+  "needs_user_decision": [
+    {
+      "item": "Enterprise-tier dedicated-instance topology at GA (inherited from HLD OAQ-5)",
+      "impact": "Commercial/GA infrastructure choice; NOT an MVP or contract blocker.",
+      "recommended_default": "Ship MVP with shared logical isolation (tenant_id payload filter + region-pinned collections via residency_region); offer dedicated per-tenant instances as a paid Enterprise add-on at GA."
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+"""FastAPI application factory for the RAG Refinement System backend.
+
+Builds the real ASGI application: the liveness/readiness probe router
+(NFR-009, ADR-5), the /v1 routing, answer, and document/compliance routers
+(openapi.yaml), the ``/metrics`` observability surface (PRD §21), and the
+RFC-7807 exception handlers. LangSmith tracing is configured from the
+environment at construction time. The factory is side-effect free with respect
+to external dependencies so it can be imported by the test suite and run
+without credentials.
+"""
+
+from __future__ import annotations
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from backend.app.api.answer import router as answer_router
+from backend.app.api.documents import router as documents_router
+from backend.app.api.observability import router as observability_router
+from backend.app.api.routing import router as routing_router
+from backend.app.errors import register_exception_handlers
+from backend.app.health import router as health_router
+from backend.app.productization.tracing import configure_tracing
+from backend.app.settings import get_settings
+
+
+def create_app() -> FastAPI:
+    """Create and configure the FastAPI application instance.
+
+    Returns:
+        A FastAPI app with the health/readiness, routing, answer, and document
+        routers mounted and the RFC-7807 exception handlers registered.
+    """
+    settings = get_settings()
+    configure_tracing()
+    app = FastAPI(
+        title=settings.app_name,
+        version=settings.app_version,
+        description="TOC-routed retrieval layer backend.",
+    )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_allowed_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    register_exception_handlers(app)
+    app.include_router(health_router)
+    app.include_router(observability_router)
+    app.include_router(routing_router)
+    app.include_router(answer_router)
+    app.include_router(documents_router)
+    return app
+
+
+app = create_app()

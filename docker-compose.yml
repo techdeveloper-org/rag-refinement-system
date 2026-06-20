@@ -1,0 +1,66 @@
+# Local development stack for the RAG Refinement System.
+# Provides PostgreSQL (structure store, ADR-10) and Qdrant (vector store, ADR-2)
+# alongside the API. ChromaDB is the documented dev alternative per ADR-2, but
+# this compose targets Qdrant to mirror production. Secrets are injected at run
+# time from the developer's local .env (see .env.example) and are never baked in.
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-rag}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rag}
+      POSTGRES_DB: ${POSTGRES_DB:-rag}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rag}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  qdrant:
+    image: qdrant/qdrant:v1.11.0
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-rag}:${POSTGRES_PASSWORD:-rag}@postgres:5432/${POSTGRES_DB:-rag}
+      QDRANT_URL: http://qdrant:6333
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      COHERE_API_KEY: ${COHERE_API_KEY:-}
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
+      JWT_SECRET: ${JWT_SECRET:-}
+      API_KEY_SALT: ${API_KEY_SALT:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health').status==200 else 1)\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  postgres_data:
+  qdrant_data:

@@ -1,0 +1,195 @@
+{
+  "$comment": "Phase 7 (TODO-08) Agent-Task Routing AR4: per Sprint-1 story, three chain-of-thought (CoT) prompts - dev / qa / review - each model-aware, with a mandatory 'Context Budget: {N} tokens | Sources: [...]' header (ENFORCEMENT RULES), zero placeholders, referencing real FRs/ACs/API operationIds/ADRs/advisories. The Sprint-1 set is exactly the foundation + P0-risk stories (STORY-001,002,003,004,005,008,009,011,014,034,038) so ALL 11 get FULL CoT prompts; there are no stubs. prompt-generation-expert auto-invoked. Source: ar1_assignments.json, ar3_context_windows.json, sprint_agent_briefs.json, openapi.yaml, grand_advisory_items.json, _common_context.md.",
+  "generated": "2026-06-06",
+  "phase": "8",
+  "artifact": "IR.3 (AR4-v2)",
+  "prompt_policy": {
+    "header_required": "Context Budget: {N} tokens | Sources: [...]",
+    "cot_structure": "REASON (decompose AC into steps) -> PLAN (file/module targets) -> IMPLEMENT (write code/tests) -> SELF-CHECK (assert gate conditions) -> EMIT",
+    "model_awareness": "dev prompts -> implementation-capable coding agent (sonnet-class, opus override on rate limit per model-fallback.md); qa prompts -> deterministic-fixture authoring; review prompts -> security/maker-checker review agent. budget_tokens passed per STEP 4.5; EXCELLENCE reserved for opus math masters only.",
+    "zero_placeholders": true
+  },
+  "full_prompt_story_ids": [
+    "STORY-001",
+    "STORY-002",
+    "STORY-003",
+    "STORY-004",
+    "STORY-005",
+    "STORY-008",
+    "STORY-009",
+    "STORY-011",
+    "STORY-014",
+    "STORY-034",
+    "STORY-038"
+  ],
+  "stub_story_ids": [],
+  "full_vs_stub": {
+    "full": 11,
+    "stub": 0,
+    "note": "All 11 Sprint-1 stories are foundation or P0-risk; all received full CoT prompts. No remainder to stub."
+  },
+  "execution_plan": [
+    {
+      "story_id": "STORY-001",
+      "title": "PostgreSQL structure schema + migrations",
+      "dev_agent": "database-engineer",
+      "review_agent": "python-backend-engineer",
+      "prompts": {
+        "dev": "Context Budget: 12000 tokens | Sources: [pg-schema-delta, dpdp-compliance-delta, hld.md 4.1/4.2, SRS.md AC-003/AC-024, ADR-10]\nROLE: database-engineer. TASK: Implement STORY-001 - PostgreSQL structure schema + forward/rollback migrations (FR-003, FR-024).\nREASON: AC-003 requires an L1/L2 section hierarchy with authoritative page ranges; AC-024 requires document management metadata. AGREED CONTRACT (backend <-> database-engineer) fixes documents(doc_id PK, title, total_pages, domain) and sections(section_id PK, doc_id FK, title, level, page_start, page_end, summary). dpdp-compliance-delta requires pii_flags + residency_region columns and tenant_id on EVERY row (tenant isolation, Sprint-1 DoD item 4).\nPLAN: (1) migrations/0001_create_documents.{up,down}.sql; (2) migrations/0002_create_sections.{up,down}.sql with FK to documents and an index on (doc_id, level); (3) add tenant_id (NOT NULL), pii_flags (jsonb), residency_region, fallback_only to the relevant tables; (4) snake_case names per standards.\nIMPLEMENT: Write the DDL + reversible down-migrations. No PII values in seed data. No hardcoded credentials - DATABASE_URL via env (devops AGREED CONTRACT).\nSELF-CHECK: assert every table has tenant_id NOT NULL; migrations apply forward and roll back clean; section page_start<=page_end constraint present; unit tests (pytest + a transactional fixture) pass. EMIT migrations + a schema unit test module.",
+        "qa": "Context Budget: 12000 tokens | Sources: [pg-schema-delta, SRS.md AC-003/AC-024]\nROLE: database-engineer (test author). TASK: deterministic schema tests for STORY-001.\nREASON: gate = unit tests pass; migrations forward+rollback; tenant_id on every row.\nPLAN/IMPLEMENT: (1) test_migrations_forward_then_rollback restores baseline; (2) test_every_table_has_tenant_id_not_null introspects information_schema; (3) test_sections_fk_and_page_range_constraint inserts a violating row and asserts rejection; (4) test_pii_flags_column_exists.\nSELF-CHECK: all tests green, no network, no real PII. EMIT the test module.",
+        "review": "Context Budget: 12000 tokens | Sources: [pg-schema-delta, AGREED CONTRACT backend<->database-engineer]\nROLE: python-backend-engineer (CHECKER, Maker!=Maker). TASK: review STORY-001 schema as the downstream consumer.\nREASON: backend's targeted-retrieval filter and IDOR guards depend on tenant_id and the section_id key.\nCHECK: (1) documents/sections columns exactly match the AGREED CONTRACT; (2) tenant_id present and NOT NULL on every row (no cross-tenant read path possible); (3) section_id is a stable PK usable as the universal join key; (4) migrations reversible. VERDICT: APPROVED only if all four hold; else itemize for solution-architect."
+      },
+      "inherited_from_phase7": true,
+      "phase8_self_review_verdict": "CLEAR"
+    },
+    {
+      "story_id": "STORY-038",
+      "title": "Auth: API keys + OAuth2/JWT + tenant substrate",
+      "dev_agent": "python-backend-engineer",
+      "review_agent": "auth-security-specialist",
+      "prompts": {
+        "dev": "Context Budget: 14000 tokens | Sources: [auth-schema-delta, threat-model-delta, openapi.yaml securitySchemes, ADR-7, ADV-003, NFR-015]\nROLE: python-backend-engineer. TASK: Implement STORY-038 - API keys (enterprise) + OAuth2/JWT (personal tool) + tenant_id scoping substrate (NFR-015).\nREASON: ADR-7 mandates API keys with rotation for enterprise and OAuth2/JWT for the SPA. ADV-003 requires rate-limiting on all authenticated ops. Sprint DoD item 4 requires the tenant_id scoping path that targeted retrieval and IDOR guards depend on.\nPLAN: (1) auth dependency that validates JWT (signature, exp, aud) and resolves API keys; (2) API-key issuance + rotation with a hashed-at-rest store (no plaintext key persisted); (3) tenant_id extraction into request scope from the credential; (4) a rate-limit middleware (default per-credential policy) applied to authenticated ops per ADV-003.\nIMPLEMENT: FastAPI security dependency + Pydantic boundary validation. Secrets (ANTHROPIC/OPENAI/JWT signing key) via env only - never in code (devops AGREED CONTRACT). RFC-7807 problem+json on 401/403.\nSELF-CHECK: assert JWT tamper -> 401; expired -> 401; rotated key invalidates old; every authenticated op carries rate-limit; no secret literal in source. EMIT auth module + tests.",
+        "qa": "Context Budget: 14000 tokens | Sources: [auth-schema-delta, ADV-003, openapi.yaml securitySchemes]\nROLE: python-backend-engineer (test author). TASK: auth + tenant + rate-limit tests for STORY-038.\nPLAN/IMPLEMENT: (1) test_valid_jwt_grants + test_tampered_jwt_401 + test_expired_jwt_401; (2) test_apikey_rotation_invalidates_old; (3) test_tenant_id_scoped_into_request; (4) test_authenticated_op_is_rate_limited (429 RATE_LIMITED past threshold); (5) test_no_hardcoded_secret_in_module.\nSELF-CHECK: deterministic, no live IdP. EMIT the test module.",
+        "review": "Context Budget: 14000 tokens | Sources: [threat-model-delta, AGREED CONTRACT api-security/auth<->backend, ADV-003]\nROLE: auth-security-specialist (P1 SECURITY CHECKER, Maker!=Checker). TASK: security review of STORY-038 auth.\nCHECK (OWASP/auth): (1) JWT validation complete (sig+exp+aud, no alg=none); (2) API-key rotation + hashed-at-rest, no plaintext; (3) session-fixation + privilege-escalation review; (4) rate-limit on every authenticated op (ADV-003), rate-limit-bypass tested; (5) tenant_id scope cannot be spoofed across tenants. VERDICT: APPROVED only at zero findings; else itemize -> solution-architect."
+      },
+      "inherited_from_phase7": true,
+      "phase8_self_review_verdict": "CLEAR"
+    },
+    {
+      "story_id": "STORY-002",
+      "title": "Qdrant collection + payload schema",
+      "dev_agent": "database-engineer",
+      "review_agent": "data-engineer",
+      "prompts": {
+        "dev": "Context Budget: 9000 tokens | Sources: [qdrant-payload-delta, hld.md 4.3, ADR-2, SRS.md AC-004]\nROLE: database-engineer. TASK: Implement STORY-002 - Qdrant collection + payload schema (FR-004).\nREASON: ADR-2 makes Qdrant the prod vector store; the core 'scope before search' mechanism is a payload filter on section_id (and tenant_id for isolation). AGREED CONTRACT fixes the point payload {chunk_id, section_id, doc_id, page, tenant_id}.\nPLAN: (1) collection creation with the embedding vector size matching ADR-6 (text-embedding-3-small, 1536); (2) payload indexes on section_id AND tenant_id for fast filtered search; (3) a typed payload model.\nIMPLEMENT: collection bootstrap (idempotent create-if-absent) + payload index declarations. QDRANT_URL via env. No PII.\nSELF-CHECK: assert a search with filter section_id IN (...) AND tenant_id returns only matching points; payload index exists on both fields; create is idempotent. EMIT the collection module + tests.",
+        "qa": "Context Budget: 9000 tokens | Sources: [qdrant-payload-delta, SRS.md AC-004]\nROLE: database-engineer (test author). TASK: payload-filter tests for STORY-002.\nPLAN/IMPLEMENT: (1) test_collection_created_idempotent; (2) test_payload_index_on_section_id_and_tenant_id; (3) test_filter_isolates_by_tenant_id (cross-tenant point not returned); (4) test_vector_size_matches_embedding_model. Use a local Chroma/Qdrant test instance or in-memory fake.\nSELF-CHECK: deterministic, no network egress. EMIT the test module.",
+        "review": "Context Budget: 9000 tokens | Sources: [qdrant-payload-delta, AGREED CONTRACT backend<->database-engineer payload filter]\nROLE: data-engineer (CHECKER, Maker!=Checker). TASK: review STORY-002 as the upsert consumer.\nCHECK: (1) payload shape exactly {chunk_id, section_id, doc_id, page, tenant_id}; (2) section_id + tenant_id indexed; (3) the payload filter the router/retrieval needs is satisfiable; (4) vector size matches ADR-6. VERDICT: APPROVED at zero gaps; else itemize."
+      },
+      "inherited_from_phase7": true,
+      "phase8_self_review_verdict": "CLEAR"
+    },
+    {
+      "story_id": "STORY-004",
+      "title": "Service skeleton: Docker + /health + /ready",
+      "dev_agent": "devops-engineer",
+      "review_agent": "python-backend-engineer",
+      "prompts": {
+        "dev": "Context Budget: 9000 tokens | Sources: [auth-schema-delta (env-injection), hld.md 9, openapi.yaml getHealth/getReadiness, NFR-009]\nROLE: devops-engineer. TASK: Implement STORY-004 - service skeleton: Dockerfile + /health (liveness) + /ready (deps reachable) (NFR-009).\nREASON: AGREED CONTRACT (devops <-> all implementers): each service ships a Dockerfile + /health + /ready; /ready returns 503 when a dependency (Postgres, Qdrant) is down. openapi declares getHealth and getReadiness operationIds.\nPLAN: (1) Dockerfile (Python 3.11 slim, non-root user, no secrets baked in); (2) /health returns 200 liveness; (3) /ready probes Postgres + Qdrant reachability, returns 200 when all up, 503 when any down; (4) 12-factor env (DATABASE_URL, QDRANT_URL) injected at runtime.\nIMPLEMENT: Dockerfile + the two probe endpoints + a docker-compose for local deps.\nSELF-CHECK: assert /ready -> 503 with a dep down, 200 with all up; image runs as non-root; no secret in the image layers. EMIT Dockerfile, compose, probe module + tests.",
+        "qa": "Context Budget: 9000 tokens | Sources: [openapi.yaml getReadiness, NFR-009]\nROLE: devops-engineer (test author). TASK: health/ready tests for STORY-004.\nPLAN/IMPLEMENT: (1) test_health_returns_200; (2) test_ready_returns_200_when_deps_up; (3) test_ready_returns_503_when_dependency_down (mock a dep failure); (4) test_image_runs_as_non_root.\nSELF-CHECK: deterministic with mocked deps. EMIT the test module.",
+        "review": "Context Budget: 9000 tokens | Sources: [openapi.yaml getHealth/getReadiness, AGREED CONTRACT devops<->implementers]\nROLE: python-backend-engineer (CHECKER, Maker!=Checker). TASK: review STORY-004 from the service-host side.\nCHECK: (1) /health + /ready operationIds match openapi; (2) /ready truly probes Postgres + Qdrant and 503s on failure; (3) no secrets in image; (4) probes mountable on the FastAPI app. VERDICT: APPROVED at zero gaps; else itemize."
+      },
+      "inherited_from_phase7": true,
+      "phase8_self_review_verdict": "CLEAR"
+    },
+    {
+      "story_id": "STORY-005",
+      "title": "CI: lint + type + unit + SAST + secrets scan",
+      "dev_agent": "devops-engineer",
+      "review_agent": "secrets-detection-specialist",
+      "prompts": {
+        "dev": "Context Budget: 10000 tokens | Sources: [threat-model-delta, hld.md 8, SRS.md NFR-007/NFR-010, AGREED CONTRACT sast/secrets<->devops]\nROLE: devops-engineer. TASK: Implement STORY-005 - CI gate: lint + type + unit + SAST + secrets scan (NFR-007, NFR-010).\nREASON: AGREED CONTRACT: SAST + secrets scan on every CI run, blocking on any hardcoded key; Python + TS stacks configured; SCA/CVE on dependency changes. NFR-010 = RFC-7807/OpenAPI conformance via contract tests in CI.\nPLAN: (1) CI workflow with stages lint (ruff/eslint) -> typecheck (mypy/tsc) -> unit (pytest/vitest) -> SAST -> secrets scan -> SCA; (2) secrets scan blocks the pipeline on any detected key; (3) exclusion patterns for fixtures; (4) OpenAPI contract-test stage (NFR-010).\nIMPLEMENT: the CI workflow file + scanner configs for Python and TS.\nSELF-CHECK: assert a planted dummy hardcoded key fails the pipeline; lint/type/unit gates wired; no real secret in config. EMIT the CI workflow + scanner configs.",
+        "qa": "Context Budget: 10000 tokens | Sources: [AGREED CONTRACT sast/secrets<->devops, NFR-007]\nROLE: devops-engineer (test author). TASK: CI-gate verification for STORY-005.\nPLAN/IMPLEMENT: (1) test_pipeline_blocks_on_planted_hardcoded_key; (2) test_lint_type_unit_stages_present; (3) test_python_and_ts_stacks_configured; (4) test_openapi_contract_stage_runs.\nSELF-CHECK: dummy secret is synthetic, no real credential. EMIT the verification spec.",
+        "review": "Context Budget: 10000 tokens | Sources: [threat-model-delta, AGREED CONTRACT sast/secrets<->devops]\nROLE: secrets-detection-specialist (P1 SECURITY CHECKER, Maker!=Checker). TASK: review STORY-005 secrets/SAST gate.\nCHECK: (1) secrets scanner runs on EVERY CI run and HARD-blocks on a hardcoded key; (2) both Python and TS stacks covered; (3) exclusion patterns do not create a bypass; (4) SCA/CVE + SBOM on dependency changes. VERDICT: APPROVED at zero findings; else itemize -> solution-architect."
+      },
+      "inherited_from_phase7": true,
+      "phase8_self_review_verdict": "CLEAR"
+    },
+    {
+      "story_id": "STORY-008",
+      "title": "PDF upload + extraction (POST /v1/documents)",
+      "dev_agent": "python-backend-engineer",
+      "review_agent": "data-engineer",
+      "prompts": {
+        "dev": "Context Budget: 14000 tokens | Sources: [api-contract-delta, ingestion-pipeline-delta, hld.md 3.1, openapi.yaml ingestDocument, SRS.md AC-001, ADV-001]\nROLE: python-backend-engineer. TASK: Implement STORY-008 - PDF upload + extraction endpoint (POST /v1/documents, operationId ingestDocument) (FR-001).\nREASON: AGREED CONTRACT (backend <-> data-engineer): backend owns the HTTP upload endpoint and calls data-engineer's ingest_document(doc) -> {doc_id, toc}; idempotent on content hash (re-upload reuses doc_id). openapi fixes the IngestResponse shape. ADV-001: first backend doc pass sets fr_api_traceability header scalars fr_mapped_to_api=23/fr_non_api=6 (do not change mapping entries).\nPLAN: (1) POST /v1/documents accepting a PDF; (2) compute content hash, dedup -> reuse doc_id; (3) call ingest_document and return IngestResponse {doc_id, ingest_status, toc...}; (4) tenant_id from auth scope written onto the document; (5) RFC-7807 errors with the declared 4xx/5xx codes.\nIMPLEMENT: the FastAPI route + Pydantic IngestResponse + content-hash idempotency. File bytes are runtime data, not prompt context (PII isolation).\nSELF-CHECK: assert re-upload of identical content returns the same doc_id; IngestResponse matches openapi; tenant_id stamped; 4xx/5xx per catalog. EMIT the endpoint + tests + the ADV-001 traceability-header fix.",
+        "qa": "Context Budget: 14000 tokens | Sources: [openapi.yaml ingestDocument, SRS.md AC-001]\nROLE: python-backend-engineer (test author). TASK: upload-endpoint tests for STORY-008.\nPLAN/IMPLEMENT: (1) test_upload_returns_ingest_response_shape; (2) test_idempotent_on_content_hash_reuses_doc_id; (3) test_tenant_id_stamped_on_document; (4) test_error_codes_rfc7807 (>=2 error codes). \nSELF-CHECK: fixture PDFs are synthetic, no real PII. EMIT the test module.",
+        "review": "Context Budget: 14000 tokens | Sources: [ingestion-pipeline-delta, AGREED CONTRACT backend<->data-engineer]\nROLE: data-engineer (CHECKER, Maker!=Checker). TASK: review STORY-008 ingest handoff.\nCHECK: (1) endpoint calls ingest_document with the agreed signature; (2) content-hash idempotency reuses doc_id; (3) IngestResponse shape matches openapi; (4) tenant_id propagated into ingest. VERDICT: APPROVED at zero gaps; else itemize."
+      },
+      "inherited_from_phase7": true,
+      "phase8_self_review_verdict": "CLEAR"
+    },
+    {
+      "story_id": "STORY-009",
+      "title": "Native TOC extraction (Scenario A)",
+      "dev_agent": "data-engineer",
+      "review_agent": "python-backend-engineer",
+      "prompts": {
+        "dev": "Context Budget: 12000 tokens | Sources: [ingestion-pipeline-delta, toc-dsa-delta, hld.md 3.1, ADR-4, SRS.md AC-002]\nROLE: data-engineer. TASK: Implement STORY-009 - native TOC extraction for Scenario A (FR-002).\nREASON: ADR-4 uses PyMuPDF get_toc() to yield the native bookmark TOC with page numbers for free (Scenario A, highest-coverage/lowest-risk). AC-002 requires level/title/page-range per TOC entry. toc-dsa-delta defines the page->section interval mapping.\nPLAN: (1) extract get_toc() entries -> [{level, title, page_start, page_end}]; (2) derive page_end from the next sibling's page_start - 1 (last section ends at total_pages); (3) persist section rows (tenant_id propagated) per the STORY-001 schema; (4) build the page->section interval map.\nIMPLEMENT: the TOC extractor + section-row writer. TOC = structural metadata (titles/pages), not PII.\nSELF-CHECK: assert level/title/page_start/page_end correct on a golden bookmarked PDF; page ranges non-overlapping and contiguous; last section ends at total_pages. EMIT the extractor + tests.",
+        "qa": "Context Budget: 12000 tokens | Sources: [toc-dsa-delta, SRS.md AC-002]\nROLE: data-engineer (test author). TASK: TOC-extraction tests for STORY-009.\nPLAN/IMPLEMENT: (1) golden bookmarked PDF fixture -> test_toc_levels_titles_pages_match_golden; (2) test_page_ranges_contiguous_non_overlapping; (3) test_last_section_ends_at_total_pages; (4) test_section_rows_carry_tenant_id.\nSELF-CHECK: golden fixture is synthetic. EMIT the test module + golden fixture descriptor.",
+        "review": "Context Budget: 12000 tokens | Sources: [toc-dsa-delta, hld.md 3.1]\nROLE: python-backend-engineer (CHECKER, Maker!=Checker). TASK: review STORY-009 as the IngestResponse.toc producer's consumer.\nCHECK: (1) toc entries carry level/title/page_start/page_end; (2) page ranges authoritative + contiguous; (3) section rows match the schema; (4) toc serializes into IngestResponse cleanly. VERDICT: APPROVED at zero gaps; else itemize."
+      },
+      "inherited_from_phase7": true,
+      "phase8_self_review_verdict": "CLEAR"
+    },
+    {
+      "story_id": "STORY-003",
+      "title": "Embedding + idempotent upsert pipeline",
+      "dev_agent": "data-engineer",
+      "review_agent": "database-engineer",
+      "prompts": {
+        "dev": "Context Budget: 13000 tokens | Sources: [ingestion-pipeline-delta, qdrant-payload-delta, hld.md 4.3, ADR-6, SRS.md AC-004/AC-001]\nROLE: data-engineer. TASK: Implement STORY-003 - embedding + idempotent upsert pipeline (FR-004).\nREASON: AGREED CONTRACT: data-engineer owns embed + upsert. ADR-6: OpenAI text-embedding-3-small primary (BGE-M3 multilingual fallback). Upsert targets the STORY-002 Qdrant payload {chunk_id, section_id, doc_id, page, tenant_id}. Idempotent on content hash (re-upload must not duplicate points).\nPLAN: (1) embed section-aware chunks (from STORY-011) with text-embedding-3-small; (2) deterministic point id from content hash -> upsert is idempotent; (3) attach full payload incl. tenant_id; (4) OPENAI_API_KEY via env only.\nIMPLEMENT: the embed+upsert pipeline. Chunk text is runtime data, not prompt context (PII isolation); no key literal.\nSELF-CHECK: assert re-running upsert on identical chunks yields no duplicate points; payload complete incl. tenant_id; key sourced from env. EMIT the pipeline + tests.",
+        "qa": "Context Budget: 13000 tokens | Sources: [qdrant-payload-delta, SRS.md AC-004]\nROLE: data-engineer (test author). TASK: embed/upsert tests for STORY-003.\nPLAN/IMPLEMENT: (1) test_upsert_idempotent_no_duplicate_points; (2) test_payload_complete_with_tenant_id; (3) test_embedding_dim_matches_collection; (4) test_api_key_from_env_only. Mock the embedding API for determinism.\nSELF-CHECK: no live API call, no real key. EMIT the test module.",
+        "review": "Context Budget: 13000 tokens | Sources: [qdrant-payload-delta, AGREED CONTRACT data-engineer owns embed+upsert]\nROLE: database-engineer (CHECKER, Maker!=Checker). TASK: review STORY-003 against the STORY-002 payload schema.\nCHECK: (1) upsert payload matches the collection schema/index exactly; (2) idempotent on content hash; (3) tenant_id on every point; (4) vector dim matches collection. VERDICT: APPROVED at zero gaps; else itemize."
+      },
+      "inherited_from_phase7": true,
+      "phase8_self_review_verdict": "CLEAR"
+    },
+    {
+      "story_id": "STORY-011",
+      "title": "Section-aware 3-level chunking",
+      "dev_agent": "data-engineer",
+      "review_agent": "ai-engineer",
+      "prompts": {
+        "dev": "Context Budget: 14000 tokens | Sources: [ingestion-pipeline-delta, pg-schema-delta, toc-dsa-delta, hld.md 4.1, SRS.md AC-003]\nROLE: data-engineer. TASK: Implement STORY-011 - section-aware 3-level chunking (FR-003, P0-risk).\nREASON: AGREED CONTRACT: no chunk crosses a section boundary. AC-003: L1/L2/L3 section-aware chunks. P0-risk requires deterministic golden fixtures. Chunks carry section_id so scoped retrieval (router consumer) works.\nPLAN: (1) split each section's text into chunks bounded strictly within section page/offset ranges (no mid-sentence cross-boundary chunk); (2) attach {chunk_id, section_id, doc_id, page, tenant_id}; (3) deterministic chunking (stable chunk_id from content) so golden fixtures reproduce exactly.\nIMPLEMENT: the chunker. Chunk text is runtime data (PII isolation); fixtures synthetic.\nSELF-CHECK: assert NO chunk spans two section_ids; chunking deterministic (same input -> same chunk_ids); every chunk has section_id + tenant_id. EMIT the chunker + deterministic golden fixtures + tests.",
+        "qa": "Context Budget: 14000 tokens | Sources: [toc-dsa-delta, SRS.md AC-003, AGREED CONTRACT no chunk crosses a section boundary]\nROLE: data-engineer (test author). TASK: deterministic golden chunking tests for STORY-011 (P0-risk).\nPLAN/IMPLEMENT: (1) golden section set -> test_chunks_match_golden_exactly; (2) test_no_chunk_crosses_section_boundary; (3) test_chunking_deterministic_stable_ids; (4) test_every_chunk_has_section_id_and_tenant_id.\nSELF-CHECK: golden fixtures synthetic and committed. EMIT the test module + golden fixtures.",
+        "review": "Context Budget: 14000 tokens | Sources: [toc-dsa-delta, router-contract-delta]\nROLE: ai-engineer (CHECKER, Maker!=Checker). TASK: review STORY-011 as the scoped-retrieval consumer.\nCHECK: (1) no chunk crosses a section boundary (router scoping integrity); (2) section_id correct on every chunk so filter section_id IN (...) is exact; (3) deterministic golden fixtures present; (4) tenant_id on every chunk. VERDICT: APPROVED at zero gaps; else itemize -> solution-architect."
+      },
+      "inherited_from_phase7": true,
+      "phase8_self_review_verdict": "CLEAR"
+    },
+    {
+      "story_id": "STORY-014",
+      "title": "LangGraph router node (Claude 3 Haiku)",
+      "dev_agent": "ai-engineer",
+      "review_agent": "threat-modeling-specialist",
+      "prompts": {
+        "dev": "Context Budget: 16000 tokens | Sources: [router-contract-delta, toc-dsa-delta, fallback-graph-delta, threat-model-delta, hld.md 3.2/7.1, ADR-1, ADR-3, SRS.md AC-005, ADV-004]\nROLE: ai-engineer. TASK: Implement STORY-014 - LangGraph router node with Claude 3 Haiku (FR-005, NFR-008, P0-risk).\nREASON: ADR-1/ADR-3: Claude 3 Haiku router inside a LangGraph node, in-process async, NEVER calls the generation LLM, returns {relevant_sections[], page_ranges[], confidence[], fallback, routing_time_ms, rationale} (RouterOutput, HLD 7.1). AC-005 + routing_time_ms in [100,300]. ADV-004 + NFR-008 (OWASP-LLM01): treat document text + user query as UNTRUSTED; validate the LLM response against the RouterOutput contract; reject any non-conforming/non-JSON response with a DETERMINISTIC fallback.\nPLAN: (1) build the router prompt with strict system/role separation and a strict-JSON output schema; (2) call Claude 3 Haiku; (3) parse + validate against RouterOutput; on any violation -> deterministic fallback (fallback=true, full-doc path per fallback-graph-delta); (4) confidence-thresholded top-K section selection; (5) emit routing_time_ms.\nIMPLEMENT: the LangGraph node + RouterOutput validator + fallback branch. No PII in the prompt; section titles/query are untrusted input.\nSELF-CHECK: assert non-JSON LLM output -> deterministic fallback (no crash, no injection passthrough); RouterOutput schema enforced; routing_time_ms recorded; router never invokes the generation LLM. EMIT the node + golden-TOC fixtures + prompt-injection fixtures (ADV-004) + tests.",
+        "qa": "Context Budget: 16000 tokens | Sources: [router-contract-delta, SRS.md AC-005, ADV-004]\nROLE: ai-engineer (test author). TASK: router golden + injection tests for STORY-014 (P0-risk).\nPLAN/IMPLEMENT: (1) golden-TOC fixtures -> test_correct_section_recall; (2) test_router_output_contract_enforced; (3) test_non_json_response_triggers_deterministic_fallback; (4) prompt-injection fixtures (malicious section titles/queries) -> test_injection_does_not_break_schema; (5) test_routing_time_ms_in_100_300; (6) test_router_never_calls_generation_llm.\nSELF-CHECK: LLM mocked for determinism; injection fixtures synthetic. EMIT the test module + fixtures.",
+        "review": "Context Budget: 16000 tokens | Sources: [threat-model-delta, AGREED CONTRACT threat-modeling<->ai-engineer OWASP-LLM, ADV-004]\nROLE: threat-modeling-specialist (P1 LLM-SECURITY CHECKER, Maker!=Checker). TASK: OWASP-LLM review of STORY-014.\nCHECK (OWASP LLM Top-10): (1) LLM01 prompt injection - system/role separation, strict-JSON, reject non-JSON, untrusted document text + query handled; (2) deterministic fallback on any contract violation (no injected control passthrough); (3) router output schema-validated before use; (4) router never reaches the generation LLM; (5) prompt-injection fixture set present for Phase D. VERDICT: APPROVED at zero findings; else itemize -> solution-architect."
+      },
+      "inherited_from_phase7": true,
+      "phase8_self_review_verdict": "CLEAR"
+    },
+    {
+      "story_id": "STORY-034",
+      "title": "DPDP access + x-pii inventory (FR-029)",
+      "dev_agent": "python-backend-engineer",
+      "review_agent": "security-compliance-mapper",
+      "prompts": {
+        "dev": "Context Budget: 14000 tokens | Sources: [dpdp-compliance-delta, api-contract-delta, pg-schema-delta, hld.md 7.4/4.2, openapi.yaml exportDocumentData/x-pii, SRS.md AC-026/AC-029]\nROLE: python-backend-engineer. TASK: Implement STORY-034 - DPDP access export + x-pii inventory (FR-026, FR-029).\nREASON: DPDP Act 2023 sec.8 requires a data-access endpoint. openapi: GET /v1/documents/{id}/data (operationId exportDocumentData) returns DataAccessExport with pii_fields[]; the x-pii annotation on schema fields drives that enumeration (FR-029). AC-026/AC-029. Tenant-scoped: a tenant may export ONLY its own document data.\nPLAN: (1) implement exportDocumentData returning DataAccessExport{...pii_fields[]}; (2) enumerate pii_fields[] from the x-pii-annotated fields (field NAMES from schema metadata, never hardcoded PII); (3) enforce tenant_id scope + IDOR guard (cannot read another tenant's {id}); (4) RFC-7807 errors incl. 404/403.\nIMPLEMENT: the endpoint + the x-pii field-name inventory derived from the schema annotation. PII VALUES returned are the requesting tenant's own runtime data; NO cross-tenant data, NO PII baked into code.\nSELF-CHECK: assert pii_fields[] enumerates exactly the x-pii fields; cross-tenant {id} -> 403/404 (IDOR blocked); export scoped to caller's tenant; DataAccessExport matches openapi. EMIT the endpoint + tests.",
+        "qa": "Context Budget: 14000 tokens | Sources: [dpdp-compliance-delta, openapi.yaml exportDocumentData, SRS.md AC-026/AC-029]\nROLE: python-backend-engineer (test author). TASK: DPDP-access tests for STORY-034.\nPLAN/IMPLEMENT: (1) test_pii_fields_enumerates_x_pii_fields; (2) test_export_scoped_to_tenant; (3) test_cross_tenant_id_blocked_idor (403/404); (4) test_data_access_export_shape_matches_openapi.\nSELF-CHECK: fixtures use synthetic PII only. EMIT the test module.",
+        "review": "Context Budget: 14000 tokens | Sources: [dpdp-compliance-delta, AGREED CONTRACT security-compliance-mapper<->SA DPDP]\nROLE: security-compliance-mapper (P1 PII/COMPLIANCE CHECKER, Maker!=Checker). TASK: DPDP review of STORY-034.\nCHECK (DPDP Act 2023): (1) sec.8 access export present + correct; (2) x-pii inventory (FR-029) enumerates exactly the annotated fields, no PII value leakage into logs/code; (3) tenant isolation + IDOR guard on {id}; (4) DataAccessExport maps to the regulatory access right. VERDICT: APPROVED at zero findings; else itemize -> solution-architect."
+      },
+      "inherited_from_phase7": true,
+      "phase8_self_review_verdict": "CLEAR"
+    }
+  ],
+  "summary": {
+    "story_count": 11,
+    "prompts_per_story": 3,
+    "total_prompts": 33,
+    "full_prompts": 33,
+    "stub_prompts": 0,
+    "all_have_context_budget_header": true,
+    "all_zero_placeholders": true,
+    "github_calls_made": false,
+    "phase8_repairs": 0,
+    "phase8_fast_path": true
+  },
+  "v2_provenance": {
+    "v2_equals_v1": true,
+    "note": "v2 = v1 (no repairs; fast path). All 11 Sprint-1 dev_agents self-reviewed their three CoT prompts in Phase 8 IR.1 and reported CLEAR; ir2_resolution_log.json records 0 flags, 0 prompt repairs. Every prompt is inherited verbatim from Phase 7 implementation_execution_plan.json. This is the artifact Phase B (TODO-10/11/12) loads at Step 5.",
+    "source": "docs/phase-7-routing/implementation_execution_plan.json",
+    "repairs_applied": 0,
+    "generated": "2026-06-06"
+  }
+}

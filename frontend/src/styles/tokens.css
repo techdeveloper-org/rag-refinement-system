@@ -1,0 +1,132 @@
+/* ==========================================================================
+   RAG Refinement System - Design Tokens
+   IMPORTED VERBATIM from docs/phase-3-design/tokens_css.css (Phase 3 Standard
+   Path; ui-ux-designer + ui-ux-mathematics-engineer, APCA math). This file is
+   the single source of truth for color, type, spacing, radius, elevation, and
+   motion. The design system is NOT recreated here - tailwind.config.js maps each
+   variable below into theme.extend so utilities resolve to these values.
+
+   Accessibility: APCA Lc verified (RPwD Act 2016 s40) - body text Lc >= 60,
+   UI components Lc >= 45, large text Lc >= 30.
+   DPDP Act 2023: no PII in any token value.
+   ========================================================================== */
+
+:root {
+  /* ----- Colors: surfaces ----- */
+  --color-surface:         #FFFFFF;
+  --color-surface-alt:     #F4F6FA;
+  --color-surface-sunken:  #EAEEF5;
+
+  /* ----- Colors: text ----- */
+  --color-text-primary:    #16202E;
+  --color-text-secondary:  #586273;
+  --color-text-on-primary: #FFFFFF;
+
+  /* ----- Colors: brand / action ----- */
+  --color-primary:         #1B5FD4;
+  --color-primary-dark:    #14479E;
+  --color-info:            #1B5FD4;
+
+  /* ----- Colors: borders / dividers ----- */
+  --color-border:          #7E8A9C;
+  --color-border-subtle:   #C2CAD6;
+
+  /* ----- Colors: status ----- */
+  --color-error:           #B3261E;
+  --color-success:         #1B7A40;
+  --color-warning:         #8A5A00;
+  --color-fallback:        #8A5A00;
+
+  /* ----- Colors: routing-confidence scale (semantic) -----
+     Bound to RoutingSummary.confidence[] / RelevantSection.confidence.
+     Thresholds mirror PRD 8.3: >=0.7 high, 0.5-0.7 medium, <0.5 low. */
+  --color-conf-high:       #1B7A40;
+  --color-conf-med:        #8A5A00;
+  --color-conf-low:        #B3261E;
+  --color-conf-track:      #EAEEF5;
+
+  /* ----- Colors: focus / state ----- */
+  --color-focus-ring:      #1B5FD4;
+  --color-overlay:         rgba(22, 32, 46, 0.48);
+
+  /* ----- Typography: family ----- */
+  --font-family-base: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-family-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+
+  /* ----- Typography: fluid type scale (Perfect Fourth 1.333, desktop-first) ----- */
+  --font-size-display:    clamp(2.25rem, 5vw, 3rem);
+  --font-size-heading-1:  clamp(1.75rem, 4vw, 2.25rem);
+  --font-size-heading-2:  clamp(1.5rem, 3vw, 1.75rem);
+  --font-size-heading-3:  clamp(1.25rem, 2.5vw, 1.375rem);
+  --font-size-body:       1rem;
+  --font-size-body-sm:    0.875rem;
+  --font-size-caption:    0.75rem;
+
+  /* ----- Typography: weight ----- */
+  --font-weight-regular:  400;
+  --font-weight-medium:   500;
+  --font-weight-semibold: 600;
+  --font-weight-bold:     700;
+
+  /* ----- Typography: line-height ----- */
+  --line-height-tight:   1.25;
+  --line-height-snug:    1.4;
+  --line-height-normal:  1.6;
+
+  /* ----- Spacing: 8-point grid ----- */
+  --spacing-xs:   4px;
+  --spacing-sm:   8px;
+  --spacing-md:   16px;
+  --spacing-lg:   24px;
+  --spacing-xl:   32px;
+  --spacing-2xl:  48px;
+  --spacing-3xl:  64px;
+
+  /* ----- Border radius ----- */
+  --radius-sm:    4px;
+  --radius-md:    8px;
+  --radius-lg:    12px;
+  --radius-full:  9999px;
+
+  /* ----- Elevation (shadow) ----- */
+  --elevation-0:  none;
+  --elevation-1:  0 1px 2px rgba(22, 32, 46, 0.06), 0 1px 1px rgba(22, 32, 46, 0.04);
+  --elevation-2:  0 2px 8px rgba(22, 32, 46, 0.10), 0 1px 3px rgba(22, 32, 46, 0.06);
+  --elevation-3:  0 8px 24px rgba(22, 32, 46, 0.16), 0 2px 6px rgba(22, 32, 46, 0.08);
+
+  /* ----- Motion ----- */
+  --duration-fast:    120ms;
+  --duration-normal:  200ms;
+  --duration-slow:    320ms;
+  --easing-standard:  cubic-bezier(0.2, 0, 0, 1);
+
+  /* ----- Z-index scale ----- */
+  --z-base:     0;
+  --z-sticky:   100;
+  --z-banner:   200;
+  --z-overlay:  900;
+  --z-modal:    1000;
+  --z-toast:    1100;
+
+  /* ----- Layout ----- */
+  --layout-toc-sidebar-width:   280px;
+  --layout-chat-max-width:      768px;
+  --layout-content-gutter:      var(--spacing-lg);
+  --tap-target-min:             44px;
+}
+
+/* Honour reduced-motion preference (GIGW v3.0 / WCAG 2.3.3). */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast:   0ms;
+    --duration-normal: 0ms;
+    --duration-slow:   0ms;
+  }
+}
+
+/* Global keyboard focus style - applies to all interactive components (GIGW v3.0). */
+:where(a, button, input, textarea, select, [tabindex]):focus-visible {
+  outline: 3px solid var(--color-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}

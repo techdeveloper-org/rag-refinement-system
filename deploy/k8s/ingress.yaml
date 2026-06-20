@@ -1,0 +1,40 @@
+# Ingress with TLS termination for the RAG Refinement System.
+#
+# TLS is terminated here (cert-manager issues/renews the certificate referenced
+# by `secretName`). The Ingress is the single internet-facing entry point; the
+# api and frontend Services are ClusterIP-only. SSE on /api/v1/answer requires
+# proxy buffering OFF and a generous read timeout (annotations below target the
+# NGINX ingress controller; adjust for your controller).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rag-ingress
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - app.example.com
+      secretName: rag-tls # cert-manager populates this
+  rules:
+    - host: app.example.com
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: rag-api
+                port:
+                  number: 80
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: rag-frontend
+                port:
+                  number: 80

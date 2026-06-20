@@ -1,0 +1,126 @@
+name: ci
+
+# CI gate for the RAG Refinement System (STORY-005).
+# Stages: lint -> typecheck -> test -> security (SAST + secrets scan).
+# The security job HARD-blocks the pipeline on any Bandit finding or any
+# secret detected by detect-secrets, satisfying the AGREED CONTRACT
+# (sast/secrets <-> devops): block on any hardcoded key (NFR-007).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dev dependencies
+        run: pip install ".[dev]"
+      - name: Ruff lint
+        run: ruff check backend ingestion tests
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dev dependencies
+        run: pip install ".[dev]"
+      - name: Mypy typecheck
+        run: mypy backend ingestion router db
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dev dependencies
+        run: pip install ".[dev]"
+      - name: Pytest
+        run: pytest -q --cov=backend --cov=ingestion --cov=router --cov=db --cov-fail-under=80
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install security tooling
+        run: pip install ".[dev]"
+      - name: Bandit SAST (blocking)
+        run: bandit -r backend ingestion router db
+      - name: pip-audit SCA (blocking)
+        run: pip-audit
+      - name: detect-secrets scan (blocking)
+        run: |
+          # Scan and compare against the committed baseline so acknowledged
+          # false-positives (test fixtures, enum value strings) do not block CI.
+          # Only findings that are NEW relative to .secrets.baseline cause failure.
+          python -m detect_secrets scan \
+            --exclude-files '\.env\.example$' \
+            backend ingestion router db tests > .secrets.scan.json
+          python - <<'PY'
+          import json
+          import sys
+
+          def _key(path, secret):
+              return (path, secret["line_number"], secret["type"])
+
+          with open(".secrets.baseline", encoding="utf-8") as f:
+              baseline = json.load(f)
+          with open(".secrets.scan.json", encoding="utf-8") as f:
+              scan = json.load(f)
+
+          baseline_keys = {
+              _key(path, s)
+              for path, secrets in baseline.get("results", {}).items()
+              for s in secrets
+          }
+
+          new_findings = []
+          for path, secrets in scan.get("results", {}).items():
+              for secret in secrets:
+                  if _key(path, secret) not in baseline_keys:
+                      new_findings.append((path, secret))
+
+          if new_findings:
+              for path, secret in new_findings:
+                  line = secret.get("line_number", "?")
+                  kind = secret.get("type", "unknown")
+                  print(f"NEW SECRET DETECTED: {path}:{line} [{kind}]")
+              print("detect-secrets found new potential secrets not in baseline; failing.")
+              sys.exit(1)
+          print(
+              f"detect-secrets: no new secrets "
+              f"({len(baseline_keys)} acknowledged findings in baseline)."
+          )
+          PY
+
+  frontend-security:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install frontend dependencies
+        run: npm ci
+      - name: npm audit (production deps, blocking)
+        run: npm audit --omit=dev --audit-level=low

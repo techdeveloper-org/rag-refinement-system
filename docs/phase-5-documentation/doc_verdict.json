@@ -1,0 +1,50 @@
+{
+  "phase": "5",
+  "todo": "TODO-06",
+  "title": "Blueprint Documentation - SRS + UML",
+  "verdict": "DOCUMENTATION APPROVED",
+  "gate": "DOCUMENTATION APPROVED; SRS FR->PRD traceable",
+  "rounds": 2,
+  "srs_fr_traceability_pct": 100,
+  "uml_count": 13,
+  "drawio_count": 13,
+  "open_items": 0,
+  "generated_at": "2026-06-06",
+  "reviewers": [
+    "business-analyst-agent",
+    "product-manager-agent",
+    "uml-structural-diagram-engineer",
+    "uml-behavioral-diagram-engineer",
+    "uml-interaction-diagram-engineer",
+    "drawio-diagram-architect",
+    "mermaid-diagram-engineer",
+    "hallucination-detector",
+    "context-faithfulness-engineer",
+    "consensus-agent"
+  ],
+  "round_1_rejected_findings": [
+    "usecase_diagram.md used an invalid Mermaid flowchart direction 'graph LB'; Mermaid only accepts TB/TD/BT/LR/RL. Fixed to 'graph LR'.",
+    "Initial SRS NFR section did not explicitly fold in the four phase-mandated regulatory items (DPDP data-minimization + data-subject-rights, RPwD/APCA accessibility, CERT-In 6h, IT Act reasonable security). Added Section 3.2.1 regulatory mapping onto existing PRD NFR-007/011/014 with no invented requirement."
+  ],
+  "round_2_verification": {
+    "srs_sections_present": ["1. Purpose", "2. Scope", "3. Requirements (3.1 Functional, 3.2 Non-Functional)", "4. Acceptance Criteria", "5. Out of Scope", "6. Change Log"],
+    "srs_fr_traced": "29/29 (SRS-FR-001..029 -> PRD FR-001..029)",
+    "srs_nfr_traced": "15/15 (SRS-NFR-001..015 -> PRD NFR-001..015)",
+    "srs_acceptance_criteria": "29 (one AC per FR; FR-002/005/008/009/025/027 aligned to PRD section 12 BDD)",
+    "mermaid_validation": "13/13 parsed clean via mermaid v11 headless (mermaid.parse, FAILS=0) - GitHub-renderable",
+    "drawio_validation": "13/13 well-formed mxGraph XML (XMLValidator, FAILS=0)",
+    "drawio_full_vs_placeholder": "4 full mxGraph (class, component, sequence, deployment) + 9 valid placeholders referencing their Mermaid source",
+    "entity_faithfulness": "All diagram nodes reference only real HLD/openapi entities (Document/Section/Chunk, Router/Retrieve/Rerank/Generate nodes, FastAPI gateway, Qdrant/Postgres/Object storage, listed external providers, real /v1/* operations). No invented class or endpoint.",
+    "hallucination_gate": "PASS - no requirement, class, or endpoint introduced outside PRD/HLD/openapi scope",
+    "context_faithfulness": "PASS - every SRS requirement and diagram element traces to a cited source"
+  },
+  "needs_user_decision": [
+    {
+      "id": "UML-DRAWIO-DEPTH",
+      "item": "Whether the 9 placeholder .drawio files should be promoted to full hand-laid-out mxGraph diagrams, or whether the canonical Mermaid (uml/*.md) plus full .drawio for the core 4 (class/component/sequence/deployment) is sufficient.",
+      "recommended_default": "Keep current split (4 full + 9 Mermaid-referencing placeholders). The Mermaid files are the GitHub-renderable single source of truth per rule 45; full draw.io is only valuable for the structurally complex core diagrams. Promote individual placeholders on demand.",
+      "blocking": false
+    }
+  ],
+  "stop_point": "User reviews SRS + UML"
+}

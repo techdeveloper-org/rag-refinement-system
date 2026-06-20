@@ -1,0 +1,32 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram id="sequence_diagram" name="Sequence Diagram">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="hUser" value="Arjun (SPA)" style="shape=umlActor;verticalLabelPosition=bottom;html=1;outlineConnect=0;" vertex="1" parent="1"><mxGeometry x="40" y="40" width="40" height="60" as="geometry"/></mxCell>
+        <mxCell id="hAPI" value="API Gateway" style="shape=rectangle;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="160" y="50" width="100" height="40" as="geometry"/></mxCell>
+        <mxCell id="hRouter" value="Router Node&#10;Claude 3 Haiku" style="shape=rectangle;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="340" y="50" width="110" height="40" as="geometry"/></mxCell>
+        <mxCell id="hRet" value="Retrieve Node" style="shape=rectangle;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="540" y="50" width="100" height="40" as="geometry"/></mxCell>
+        <mxCell id="hQD" value="Qdrant" style="shape=rectangle;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="720" y="50" width="90" height="40" as="geometry"/></mxCell>
+        <mxCell id="hGen" value="Generate Node&#10;Claude/GPT-4o" style="shape=rectangle;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="900" y="50" width="110" height="40" as="geometry"/></mxCell>
+        <mxCell id="lUser" style="endArrow=none;dashed=1;html=1;" edge="1" parent="1" source="hUser"><mxGeometry relative="1" as="geometry"><mxPoint x="60" y="100" as="sourcePoint"/><mxPoint x="60" y="760" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="lAPI" style="endArrow=none;dashed=1;html=1;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="210" y="90" as="sourcePoint"/><mxPoint x="210" y="760" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="lRouter" style="endArrow=none;dashed=1;html=1;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="395" y="90" as="sourcePoint"/><mxPoint x="395" y="760" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="lRet" style="endArrow=none;dashed=1;html=1;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="590" y="90" as="sourcePoint"/><mxPoint x="590" y="760" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="lQD" style="endArrow=none;dashed=1;html=1;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="765" y="90" as="sourcePoint"/><mxPoint x="765" y="760" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="lGen" style="endArrow=none;dashed=1;html=1;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="955" y="90" as="sourcePoint"/><mxPoint x="955" y="760" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="m1" value="1: POST /v1/answer (JWT)" style="endArrow=block;html=1;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="60" y="140" as="sourcePoint"/><mxPoint x="210" y="140" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="m2" value="2: route(query, TOC)" style="endArrow=block;html=1;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="210" y="200" as="sourcePoint"/><mxPoint x="395" y="200" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="m3" value="3: RouterOutput {sections, confidence, fallback, rationale}" style="endArrow=block;dashed=1;html=1;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="395" y="260" as="sourcePoint"/><mxPoint x="210" y="260" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="m4" value="4: retrieve(section_id IN selected)" style="endArrow=block;html=1;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="210" y="320" as="sourcePoint"/><mxPoint x="590" y="320" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="m5" value="5: search(payload filter + tenant_id)" style="endArrow=block;html=1;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="590" y="380" as="sourcePoint"/><mxPoint x="765" y="380" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="m6" value="6: chunks" style="endArrow=block;dashed=1;html=1;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="765" y="440" as="sourcePoint"/><mxPoint x="590" y="440" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="m7" value="7: context chunks" style="endArrow=block;html=1;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="590" y="500" as="sourcePoint"/><mxPoint x="955" y="500" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="m8" value="8: event: token (TokenEvent) [streamed]" style="endArrow=block;dashed=1;html=1;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="955" y="580" as="sourcePoint"/><mxPoint x="60" y="580" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="m9" value="9: event: final (AnswerFinalEvent {answer, citations, routing})" style="endArrow=block;dashed=1;html=1;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="955" y="660" as="sourcePoint"/><mxPoint x="60" y="660" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="note" value="Router never calls Generate on the routing path; /v1/route stops at message 3. Mermaid source: uml/sequence_diagram.md" style="text;html=1;align=left;fontSize=10;" vertex="1" parent="1"><mxGeometry x="40" y="710" width="960" height="20" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

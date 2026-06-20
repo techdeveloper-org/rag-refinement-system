@@ -1,0 +1,592 @@
+{
+  "project": "RAG Refinement System",
+  "source_prompt": "docs/orchestration_prompt.md",
+  "generated": "2026-06-06",
+  "kg": {
+    "agents": 250,
+    "skills": 428,
+    "domains": 48,
+    "math_masters": 23,
+    "edges": 4210,
+    "version": "29.9.16",
+    "built": "2026-06-06"
+  },
+  "resume_procedure": [
+    "1. Read docs/execution/ledger.json.",
+    "2. Find the first TODO with status != 'done'/'awaiting_user' whose depends_on are all 'done'.",
+    "3. Open its context_file under docs/execution/.",
+    "4. Hand that packet to orchestrator-agent (it embeds the per-agent prompt(s)).",
+    "5. Set status 'in_progress' before starting; 'done' after artifacts verified; 'awaiting_user' at a STOP.",
+    "6. TODOs in the same parallel_group with satisfied deps may run concurrently.",
+    "7. On rate limit: just stop. The ledger already holds the last state. Resume at step 1."
+  ],
+  "legend": {
+    "status": [
+      "pending",
+      "in_progress",
+      "done",
+      "awaiting_user",
+      "blocked"
+    ]
+  },
+  "todos": [
+    {
+      "id": "TODO-00",
+      "title": "Phase0 refresh PRD and RnD brief",
+      "phase": "0",
+      "parallel_group": "P0",
+      "depends_on": [],
+      "status": "done",
+      "agents": [
+        "business-analyst-agent",
+        "product-manager-agent",
+        "research-strategist",
+        "technology-scout-analyst",
+        "business-development-agent"
+      ],
+      "produces": [
+        "PRD.md",
+        "docs/phase-0-requirements/phase1_architect_brief.md"
+      ],
+      "gate": "NLI=1.0 + FactScore=1.0 before handoff",
+      "stop_point": "User reviews refreshed PRD",
+      "context_file": "todos/todo-00-phase0-refresh-prd-and-rnd-brief.md",
+      "completed_artifacts": [
+        "PRD.md",
+        "docs/phase-0-requirements/phase1_architect_brief.md"
+      ]
+    },
+    {
+      "id": "TODO-01",
+      "title": "Phase1 solution architecture HLD",
+      "phase": "1",
+      "parallel_group": "P1",
+      "depends_on": [
+        "TODO-00"
+      ],
+      "status": "done",
+      "agents": [
+        "solution-architect",
+        "consensus-agent",
+        "context-engineering-agent"
+      ],
+      "produces": [
+        "docs/phase-1-architecture/hld.md"
+      ],
+      "gate": "consensus BINARY APPROVED (zero open items)",
+      "stop_point": "User APPROVED HLD",
+      "context_file": "todos/todo-01-phase1-solution-architecture-hld.md",
+      "completed_artifacts": [
+        "docs/phase-1-architecture/hld.md",
+        "docs/phase-1-architecture/context_delivery_plan.md"
+      ]
+    },
+    {
+      "id": "TODO-02",
+      "title": "Phase1.5 API contract OpenAPI",
+      "phase": "1.5",
+      "parallel_group": "P1.5",
+      "depends_on": [
+        "TODO-01"
+      ],
+      "status": "done",
+      "agents": [
+        "solution-architect",
+        "python-backend-engineer",
+        "api-testing-engineer",
+        "integration-testing-engineer",
+        "business-analyst-agent",
+        "consensus-agent"
+      ],
+      "produces": [
+        "docs/phase-1-api-contracts/openapi.yaml",
+        "docs/phase-1-api-contracts/fr_api_traceability.json"
+      ],
+      "gate": "API CONTRACT APPROVED; 100% FR->operationId; DPDP x-pii/erasure",
+      "stop_point": "User reviews openapi.yaml",
+      "context_file": "todos/todo-02-phase1.5-api-contract-openapi.md",
+      "completed_artifacts": [
+        "docs/phase-1-api-contracts/openapi.yaml",
+        "docs/phase-1-api-contracts/fr_api_traceability.json",
+        "docs/phase-1-api-contracts/error_catalog.json",
+        "docs/phase-1-api-contracts/api_contract_verdict.json"
+      ]
+    },
+    {
+      "id": "TODO-03",
+      "title": "Phase2 joint blueprint validation",
+      "phase": "2",
+      "parallel_group": "P2",
+      "depends_on": [
+        "TODO-02"
+      ],
+      "status": "done",
+      "agents": [
+        "business-analyst-agent",
+        "product-manager-agent",
+        "solution-architect",
+        "consensus-agent",
+        "hallucination-detector"
+      ],
+      "produces": [
+        "docs/phase-2-validation/advisory_items.json"
+      ],
+      "gate": "JOINT APPROVED",
+      "stop_point": "User reviews advisory items",
+      "context_file": "todos/todo-03-phase2-joint-blueprint-validation.md",
+      "completed_artifacts": [
+        "docs/phase-2-validation/advisory_items.json",
+        "docs/phase-2-validation/joint_verdict.json"
+      ]
+    },
+    {
+      "id": "TODO-04",
+      "title": "Phase3 UIUX design standard path",
+      "phase": "3",
+      "parallel_group": "P3",
+      "depends_on": [
+        "TODO-03"
+      ],
+      "status": "done",
+      "agents": [
+        "ui-ux-designer",
+        "consensus-agent",
+        "hallucination-detector"
+      ],
+      "produces": [
+        "docs/phase-3-design/wireframes",
+        "docs/phase-3-design/tokens_css.css",
+        "docs/phase-3-design/accessibility_report.json"
+      ],
+      "gate": "DESIGN APPROVED; APCA Lc>=60 body",
+      "stop_point": "User reviews design",
+      "context_file": "todos/todo-04-phase3-uiux-design-standard-path.md",
+      "completed_artifacts": [
+        "docs/phase-3-design/"
+      ]
+    },
+    {
+      "id": "TODO-05",
+      "title": "Phase4 fullstack reconciliation",
+      "phase": "4",
+      "parallel_group": "P4",
+      "depends_on": [
+        "TODO-04"
+      ],
+      "status": "done",
+      "agents": [
+        "business-analyst-agent",
+        "product-manager-agent",
+        "solution-architect",
+        "ui-ux-designer",
+        "consensus-agent",
+        "hallucination-detector",
+        "context-faithfulness-engineer"
+      ],
+      "produces": [
+        "docs/phase-4-reconciliation/hld_v3.md",
+        "docs/phase-4-reconciliation/grand_advisory_items.json"
+      ],
+      "gate": "GRAND BLUEPRINT APPROVED",
+      "stop_point": "User reviews grand blueprint",
+      "context_file": "todos/todo-05-phase4-fullstack-reconciliation.md",
+      "status_note": "GRAND BLUEPRINT APPROVED (1 round, 3 conflicts found and resolved in-session, 11 advisories). Awaiting user review at STOP point.",
+      "completed_artifacts": [
+        "docs/phase-4-reconciliation/grand_advisory_items.json",
+        "docs/phase-4-reconciliation/grand_blueprint_verdict.json",
+        "docs/phase-4-reconciliation/hld_v3.md",
+        "docs/phase-4-reconciliation/design_spec_v2_notes.md",
+        "docs/phase-4-reconciliation/reconciliation_matrix.md"
+      ]
+    },
+    {
+      "id": "TODO-06",
+      "title": "Phase5 SRS and UML documentation",
+      "phase": "5",
+      "parallel_group": "P5",
+      "depends_on": [
+        "TODO-05"
+      ],
+      "status": "done",
+      "status_note": "DOCUMENTATION APPROVED (2 rounds, 0 open items, SRS FR->PRD traceability 100%). SRS.md (6 sections, 29 FR + 15 NFR traced, 29 AC), uml/ (13 Mermaid, all parse clean), drawio/ (13 mxGraph: 4 full + 9 placeholders), drawio_urls.json + doc_verdict.json written. Awaiting user review at STOP point.",
+      "agents": [
+        "business-analyst-agent",
+        "product-manager-agent",
+        "uml-structural-diagram-engineer",
+        "uml-behavioral-diagram-engineer",
+        "uml-interaction-diagram-engineer",
+        "drawio-diagram-architect",
+        "mermaid-diagram-engineer",
+        "hallucination-detector",
+        "context-faithfulness-engineer",
+        "consensus-agent"
+      ],
+      "produces": [
+        "SRS.md",
+        "uml/",
+        "drawio/",
+        "docs/phase-5-documentation/drawio_urls.json"
+      ],
+      "gate": "DOCUMENTATION APPROVED; SRS FR->PRD traceable",
+      "stop_point": "User reviews SRS + UML",
+      "context_file": "todos/todo-06-phase5-srs-and-uml-documentation.md",
+      "completed_artifacts": [
+        "SRS.md",
+        "docs/phase-5-documentation/doc_verdict.json",
+        "docs/phase-5-documentation/drawio_urls.json",
+        "uml/ (13, gitignored)",
+        "drawio/ (13, gitignored)"
+      ]
+    },
+    {
+      "id": "TODO-07",
+      "title": "Phase6 sprint planning github",
+      "phase": "6",
+      "parallel_group": "P6",
+      "depends_on": [
+        "TODO-06"
+      ],
+      "status": "done",
+      "status_note": "SPRINT READY (consensus APPROVED, 0 open items). 8 epics, 38 stories, 100% FR->story coverage. Sprint 1 = 11 stories, 39 SP committed vs 39.9 SP ceiling (42 SP capacity, 92.9% util). DoD AHP CR=0.00763 (<0.10). DPDP x-pii (FR-029) auto-created into Sprint 1; CERT-In full hook deferred to Sprint 2 with substrate in Sprint 1. NO GitHub calls - github_issues_manifest.json (11 issues + label taxonomy + Sprint 1 milestone) is LOCAL/ready-to-create only. Awaiting user review of sprint board at STOP point.",
+      "agents": [
+        "scrum-master-agent",
+        "agile-tooling-specialist",
+        "business-analyst-agent",
+        "product-manager-agent",
+        "solution-architect",
+        "ui-ux-designer",
+        "consensus-agent"
+      ],
+      "produces": [
+        "docs/phase-6-sprint-planning/sprint_verdict.json",
+        "docs/phase-6-sprint-planning/sprint_agent_briefs.json"
+      ],
+      "gate": "SPRINT READY; 100% FR->story",
+      "stop_point": "User reviews sprint board",
+      "context_file": "todos/todo-07-phase6-sprint-planning-github.md",
+      "completed_artifacts": [
+        "docs/phase-6-sprint-planning/backlog.md",
+        "docs/phase-6-sprint-planning/sprint_1_backlog.md",
+        "docs/phase-6-sprint-planning/github_issues_manifest.json",
+        "docs/phase-6-sprint-planning/fr_story_traceability.json",
+        "docs/phase-6-sprint-planning/sprint_agent_briefs.json",
+        "docs/phase-6-sprint-planning/sprint_verdict.json"
+      ]
+    },
+    {
+      "id": "TODO-08",
+      "title": "Phase7 agent task routing",
+      "phase": "7",
+      "parallel_group": "P7",
+      "depends_on": [
+        "TODO-07"
+      ],
+      "status": "done",
+      "agents": [
+        "orchestrator-agent",
+        "agile-business-mathematics-expert",
+        "context-engineering-agent",
+        "prompt-generation-expert",
+        "hallucination-detector",
+        "context-faithfulness-engineer",
+        "reliability-auditor",
+        "security-testing-engineer",
+        "consensus-agent"
+      ],
+      "produces": [
+        "docs/phase-7-routing/implementation_execution_plan.json",
+        "docs/phase-7-routing/ar2_dag_proof.json",
+        "docs/phase-7-routing/ar3_context_windows.json"
+      ],
+      "gate": "ROUTING APPROVED; RS=1.0; STOP 7",
+      "stop_point": "STOP 7 user review",
+      "context_file": "todos/todo-08-phase7-agent-task-routing.md",
+      "completed_artifacts": [
+        "docs/phase-7-routing/ar1_assignments.json",
+        "docs/phase-7-routing/ar2_dag_proof.json",
+        "docs/phase-7-routing/ar3_context_windows.json",
+        "docs/phase-7-routing/implementation_execution_plan.json",
+        "docs/phase-7-routing/routing_verdict.json"
+      ]
+    },
+    {
+      "id": "TODO-09",
+      "title": "Phase8 pre implementation alignment",
+      "phase": "8",
+      "parallel_group": "P8",
+      "depends_on": [
+        "TODO-08"
+      ],
+      "status": "done",
+      "agents": [
+        "business-analyst-agent",
+        "product-manager-agent",
+        "solution-architect",
+        "scrum-master-agent",
+        "prompt-generation-expert",
+        "context-engineering-agent",
+        "hallucination-detector",
+        "context-faithfulness-engineer",
+        "reliability-auditor",
+        "consensus-agent"
+      ],
+      "produces": [
+        "docs/phase-8-alignment/implementation_execution_plan_v2.json",
+        "docs/phase-8-alignment/ir5_alignment_verdict.json"
+      ],
+      "gate": "IMPLEMENTATION READY; RS=1.0; STOP 8",
+      "stop_point": "STOP 8 user review",
+      "context_file": "todos/todo-09-phase8-pre-implementation-alignment.md",
+      "completed_artifacts": [
+        "docs/phase-8-alignment/ir5_alignment_verdict.json",
+        "docs/phase-8-alignment/ir2_resolution_log.json",
+        "docs/phase-8-alignment/implementation_execution_plan_v2.json",
+        "docs/phase-8-alignment/ar3_context_windows_v2.json"
+      ]
+    },
+    {
+      "id": "TODO-10",
+      "title": "PhaseB1 foundation schema and ops",
+      "phase": "B1",
+      "parallel_group": "B1",
+      "depends_on": [
+        "TODO-09"
+      ],
+      "status": "done",
+      "agents": [
+        "database-engineer",
+        "devops-engineer"
+      ],
+      "produces": [
+        "migrations/",
+        "infra/",
+        "Dockerfile",
+        "docker-compose.yml",
+        "CI workflow"
+      ],
+      "gate": "unit tests pass per component",
+      "stop_point": null,
+      "context_file": "todos/todo-10-phaseb1-foundation-schema-and-ops.md",
+      "completed_artifacts": [
+        "migrations/",
+        "db/",
+        "backend/",
+        "Dockerfile",
+        "docker-compose.yml",
+        ".github/workflows/ci.yml",
+        "pyproject.toml",
+        ".env.example",
+        "tests/"
+      ]
+    },
+    {
+      "id": "TODO-11",
+      "title": "PhaseB2 ingestion router api",
+      "phase": "B2",
+      "parallel_group": "B2",
+      "depends_on": [
+        "TODO-10"
+      ],
+      "status": "done",
+      "agents": [
+        "data-engineer",
+        "ai-engineer",
+        "prompt-generation-expert",
+        "python-backend-engineer"
+      ],
+      "produces": [
+        "ingestion module",
+        "LangGraph router module",
+        "FastAPI services"
+      ],
+      "gate": "unit tests pass per component",
+      "stop_point": null,
+      "context_file": "todos/todo-11-phaseb2-ingestion-router-api.md",
+      "completed_artifacts": [
+        "ingestion/",
+        "router/",
+        "backend/app/api/",
+        "backend/app/security/"
+      ]
+    },
+    {
+      "id": "TODO-12",
+      "title": "PhaseB3 frontend personal tool",
+      "phase": "B3",
+      "parallel_group": "B3",
+      "depends_on": [
+        "TODO-11"
+      ],
+      "status": "done",
+      "agents": [
+        "react-engineer",
+        "ui-ux-designer"
+      ],
+      "produces": [
+        "frontend/ React SPA"
+      ],
+      "gate": "unit tests pass; UI renders citations + confidence + explainability",
+      "stop_point": null,
+      "context_file": "todos/todo-12-phaseb3-frontend-personal-tool.md",
+      "completed_artifacts": [
+        "frontend/ (Vite React TS SPA, 48 vitest tests)"
+      ]
+    },
+    {
+      "id": "TODO-13",
+      "title": "PhaseC hallucination gate",
+      "phase": "C",
+      "parallel_group": "C",
+      "depends_on": [
+        "TODO-11",
+        "TODO-12"
+      ],
+      "status": "done",
+      "agents": [
+        "hallucination-detector",
+        "context-faithfulness-engineer"
+      ],
+      "produces": [
+        "detection report",
+        "faithfulness scorecard"
+      ],
+      "gate": "NLI=1.0 AND FactScore=1.0 (retry loop)",
+      "stop_point": null,
+      "context_file": "todos/todo-13-phasec-hallucination-gate.md",
+      "completed_artifacts": [
+        "docs/phase-C-hallucination/",
+        "backend/app/adapters/ (FIX-C-01..03)"
+      ]
+    },
+    {
+      "id": "TODO-14",
+      "title": "PhaseD QA pipeline",
+      "phase": "D",
+      "parallel_group": "D",
+      "depends_on": [
+        "TODO-13"
+      ],
+      "status": "done",
+      "agents": [
+        "test-management-agent",
+        "unit-testing-specialist",
+        "integration-testing-engineer",
+        "e2e-testing-engineer",
+        "api-testing-engineer",
+        "performance-testing-engineer",
+        "ai-model-testing-engineer",
+        "data-quality-testing-engineer"
+      ],
+      "produces": [
+        "IEEE 829 plan",
+        "test suites",
+        "coverage report"
+      ],
+      "gate": "coverage=100% AND DRE=1.0",
+      "stop_point": null,
+      "context_file": "todos/todo-14-phased-qa-pipeline.md",
+      "completed_artifacts": [
+        "docs/phase-D-qa/test_plan.md",
+        "docs/phase-D-qa/qa_verdict.json",
+        "tests/test_document_store_adapter.py",
+        "tests/test_dependency_providers.py",
+        "tests/test_health_internals.py",
+        "tests/test_generation_adapter.py",
+        "tests/test_backend_internals.py",
+        "tests/test_remaining_gaps.py",
+        "ingestion/tests/test_production_stores.py",
+        "ingestion/tests/test_embedder_adapters.py",
+        "ingestion/tests/test_ingestion_internals.py",
+        "router/tests/test_router_llm_adapter.py",
+        "router/tests/test_router_internals.py",
+        "pyproject.toml [tool.coverage] + pytest-cov dev dep"
+      ]
+    },
+    {
+      "id": "TODO-15",
+      "title": "PhaseF security audit",
+      "phase": "F",
+      "parallel_group": "F",
+      "depends_on": [
+        "TODO-14"
+      ],
+      "status": "done",
+      "agents": [
+        "threat-modeling-specialist",
+        "sast-engineer",
+        "secrets-detection-specialist",
+        "dependency-vulnerability-analyst",
+        "api-security-auditor",
+        "auth-security-specialist",
+        "penetration-tester",
+        "infrastructure-security-auditor",
+        "crypto-security-specialist",
+        "security-compliance-mapper",
+        "security-lead-auditor"
+      ],
+      "produces": [
+        "docs/phase-F-security/security_audit_report.md"
+      ],
+      "gate": "security-lead-auditor APPROVED; ALL finding counts = 0",
+      "stop_point": null,
+      "context_file": "todos/todo-15-phasef-security-audit.md",
+      "completed_artifacts": [
+        "docs/phase-F-security/"
+      ]
+    },
+    {
+      "id": "TODO-16",
+      "title": "PhaseE reliability gate",
+      "phase": "E",
+      "parallel_group": "E",
+      "depends_on": [
+        "TODO-13",
+        "TODO-14",
+        "TODO-15"
+      ],
+      "status": "done",
+      "agents": [
+        "reliability-auditor"
+      ],
+      "produces": [
+        "reliability report",
+        "RS value"
+      ],
+      "gate": "RS = 1.0 (retry loop, no deploy below 1.0)",
+      "stop_point": null,
+      "context_file": "todos/todo-16-phasee-reliability-gate.md",
+      "completed_artifacts": [
+        "docs/phase-E-reliability/"
+      ]
+    },
+    {
+      "id": "TODO-17",
+      "title": "PhaseG deploy and README refresh",
+      "phase": "G",
+      "parallel_group": "G",
+      "depends_on": [
+        "TODO-16"
+      ],
+      "status": "done",
+      "agents": [
+        "devops-engineer",
+        "cloud-security-architect"
+      ],
+      "produces": [
+        "prod deploy config",
+        "LangSmith monitoring",
+        "README.md"
+      ],
+      "gate": "RS=1.0 satisfied; healthchecks green",
+      "stop_point": "User reviews live deploy",
+      "context_file": "todos/todo-17-phaseg-deploy-and-readme-refresh.md",
+      "completed_artifacts": [
+        "README.md",
+        "deploy/",
+        "docs/phase-G-deploy/",
+        "backend/app/productization/",
+        "backend/app/api/observability.py"
+      ]
+    }
+  ]
+}

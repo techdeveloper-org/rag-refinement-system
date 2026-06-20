@@ -1,0 +1,63 @@
+{
+  "$comment": "Phase G (TODO-17) deploy verdict. Reliability gate RS=1.0 (docs/phase-E-reliability/reliability_verdict.json) and security APPROVED (docs/phase-F-security/security_verdict.json, unresolved_total=0) were satisfied before this phase. Additive Phase-G code (ROI calculator, KPI metrics + /metrics, LangSmith tracing wiring) was implemented with tests; full suite re-run green and ruff clean. A live cloud deploy could not be executed here (no cloud credentials).",
+  "phase": "G",
+  "generated": "2026-06-06",
+  "agents": ["devops-engineer", "cloud-security-architect"],
+  "readme_refreshed": true,
+  "prod_config": true,
+  "observability": true,
+  "roi_calculator": true,
+  "live_deploy": "requires user cloud creds",
+  "gate": "deploy-ready",
+  "predecessor_gates": {
+    "reliability_rs": 1.0,
+    "reliability_verdict": "PASS",
+    "security_verdict": "APPROVED",
+    "security_unresolved_total": 0
+  },
+  "deliverables": {
+    "readme": "README.md (refreshed: Overview, Prerequisites/Requirements, Installation/Setup, Usage, Architecture, Contributing, License)",
+    "prod_compose": "deploy/docker-compose.prod.yml",
+    "frontend_static_build": "deploy/frontend.Dockerfile",
+    "prod_env_template": "deploy/.env.prod.example",
+    "reverse_proxy_tls": "deploy/reverse-proxy/Caddyfile.example",
+    "k8s_manifests": [
+      "deploy/k8s/api-deployment.yaml",
+      "deploy/k8s/secret.example.yaml",
+      "deploy/k8s/ingress.yaml"
+    ],
+    "deploy_index": "deploy/README.md",
+    "observability_doc": "docs/phase-G-deploy/observability.md",
+    "runbook": "docs/phase-G-deploy/deploy_runbook.md",
+    "roi_calculator_module": "backend/app/productization/roi_calculator.py",
+    "metrics_module": "backend/app/productization/metrics.py",
+    "metrics_endpoint": "backend/app/api/observability.py (GET /metrics)",
+    "langsmith_tracing": "backend/app/productization/tracing.py (wired in backend/app/main.py)"
+  },
+  "security_signoff": {
+    "signed_off_by": "cloud-security-architect",
+    "tls_enforced": true,
+    "no_secrets_baked": true,
+    "non_root": true,
+    "network_segmentation": true,
+    "data_store_auth": "postgres credentials + qdrant api key (anonymous disabled)",
+    "compose_aborts_on_missing_secret": true,
+    "notes": "TLS terminates at the reverse proxy / Ingress; data stores are internal-only with no published ports; API image and nginx run non-root; k8s enforces runAsNonRoot + readOnlyRootFilesystem + dropped capabilities; all secrets injected at runtime from a secret manager."
+  },
+  "verification": {
+    "pytest": "286 passed, 1 skipped",
+    "pytest_baseline": "265 passed, 1 skipped",
+    "phase_g_tests_added": 21,
+    "phase_g_test_files": [
+      "tests/test_roi_calculator.py",
+      "tests/test_metrics.py",
+      "tests/test_tracing.py"
+    ],
+    "coverage_total_pct": 100.0,
+    "coverage_new_modules_pct": 100.0,
+    "ruff": "All checks passed!",
+    "docker_build_backend": "builds (verified locally pre-flight in runbook step 0)",
+    "live_cloud_deploy_executed": false,
+    "live_cloud_deploy_reason": "no cloud credentials or secret manager available in this environment"
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "generated_by": "ui-ux-mathematics-engineer",
+  "generated": "2026-06-06",
+  "method": "mathematical_formula",
+  "standard": "SAPC-APCA (W3 0.1.9) + WCAG 2.1",
+  "design_path": "standard",
+  "india_compliance": {
+    "rpwd_2016_s40": "APCA Lc computed by formula; thresholds Lc>=60 body / Lc>=45 UI / Lc>=30 large all met",
+    "gigw_v3_0": "keyboard navigation + visible focus documented per screen; min tap target 44px",
+    "dpdp_2023": "no PII in any token, screen, or wireframe artifact; placeholders only"
+  },
+  "thresholds": {
+    "body_text_lc": 60,
+    "ui_component_lc": 45,
+    "large_text_lc": 30
+  },
+  "note_on_wcag": "Two pairs (border on surface, border on surface-alt) show WCAG ratio ~3.2-3.5:1, below the 4.5:1 text threshold. These are NON-TEXT UI borders, not text. The binding standard for this project per RPwD Act 2016 s40 is APCA; both pass APCA Lc>=45 for UI components. WCAG non-text contrast (1.4.11) requires only 3:1 for UI component boundaries, which both satisfy. No remediation required.",
+  "pairs": [
+    { "text_token": "text-primary", "bg_token": "surface", "text_hex": "#16202E", "bg_hex": "#FFFFFF", "apca_lc": 103.3, "threshold_lc": 60, "category": "body", "wcag_ratio": "16.4:1", "apca_result": "PASS (Lc 103.3 >= 60 body)", "wcag_result": "PASS (16.4:1 >= 4.5:1)", "usage": "Body text, primary labels, streamed answer text" },
+    { "text_token": "text-primary", "bg_token": "surface-alt", "text_hex": "#16202E", "bg_hex": "#F4F6FA", "apca_lc": 97.9, "threshold_lc": 60, "category": "body", "wcag_ratio": "15.16:1", "apca_result": "PASS (Lc 97.9 >= 60 body)", "wcag_result": "PASS (15.16:1 >= 4.5:1)", "usage": "Body text on cards / TOC sidebar / CitationCard" },
+    { "text_token": "text-primary", "bg_token": "surface-sunken", "text_hex": "#16202E", "bg_hex": "#EAEEF5", "apca_lc": 93.0, "threshold_lc": 60, "category": "body", "wcag_ratio": "14.1:1", "apca_result": "PASS (Lc 93.0 >= 60 body)", "wcag_result": "PASS (14.1:1 >= 4.5:1)", "usage": "Body text on ExplainabilityPanel (sunken)" },
+    { "text_token": "text-secondary", "bg_token": "surface", "text_hex": "#586273", "bg_hex": "#FFFFFF", "apca_lc": 80.7, "threshold_lc": 45, "category": "ui", "wcag_ratio": "6.16:1", "apca_result": "PASS (Lc 80.7 >= 45 UI)", "wcag_result": "PASS (6.16:1 >= 4.5:1)", "usage": "Captions, page-range labels, secondary metadata" },
+    { "text_token": "text-secondary", "bg_token": "surface-alt", "text_hex": "#586273", "bg_hex": "#F4F6FA", "apca_lc": 75.3, "threshold_lc": 45, "category": "ui", "wcag_ratio": "5.69:1", "apca_result": "PASS (Lc 75.3 >= 45 UI)", "wcag_result": "PASS (5.69:1 >= 4.5:1)", "usage": "Citation page-range caption on CitationCard" },
+    { "text_token": "text-secondary", "bg_token": "surface-sunken", "text_hex": "#586273", "bg_hex": "#EAEEF5", "apca_lc": 70.5, "threshold_lc": 45, "category": "ui", "wcag_ratio": "5.29:1", "apca_result": "PASS (Lc 70.5 >= 45 UI)", "wcag_result": "PASS (5.29:1 >= 4.5:1)", "usage": "Rationale meta labels on ExplainabilityPanel" },
+    { "text_token": "text-on-primary", "bg_token": "primary", "text_hex": "#FFFFFF", "bg_hex": "#1B5FD4", "apca_lc": -83.5, "threshold_lc": 60, "category": "body", "wcag_ratio": "5.78:1", "apca_result": "PASS (Lc 83.5 >= 60 body)", "wcag_result": "PASS (5.78:1 >= 4.5:1)", "usage": "Send button / CTA label (white on blue)" },
+    { "text_token": "text-on-primary", "bg_token": "primary-dark", "text_hex": "#FFFFFF", "bg_hex": "#14479E", "apca_lc": -93.7, "threshold_lc": 60, "category": "body", "wcag_ratio": "8.66:1", "apca_result": "PASS (Lc 93.7 >= 60 body)", "wcag_result": "PASS (8.66:1 >= 4.5:1)", "usage": "CTA label hover/press state" },
+    { "text_token": "primary", "bg_token": "surface", "text_hex": "#1B5FD4", "bg_hex": "#FFFFFF", "apca_lc": 78.2, "threshold_lc": 45, "category": "ui", "wcag_ratio": "5.78:1", "apca_result": "PASS (Lc 78.2 >= 45 UI)", "wcag_result": "PASS (5.78:1 >= 4.5:1)", "usage": "Links, primary icons, focus ring, section chips" },
+    { "text_token": "primary", "bg_token": "surface-alt", "text_hex": "#1B5FD4", "bg_hex": "#F4F6FA", "apca_lc": 72.8, "threshold_lc": 45, "category": "ui", "wcag_ratio": "5.34:1", "apca_result": "PASS (Lc 72.8 >= 45 UI)", "wcag_result": "PASS (5.34:1 >= 4.5:1)", "usage": "Links / icons on cards" },
+    { "text_token": "border", "bg_token": "surface", "text_hex": "#7E8A9C", "bg_hex": "#FFFFFF", "apca_lc": 62.6, "threshold_lc": 45, "category": "ui", "wcag_ratio": "3.5:1", "apca_result": "PASS (Lc 62.6 >= 45 UI)", "wcag_result": "N/A (non-text border; WCAG 1.4.11 requires 3:1 -> PASS)", "usage": "Input / card borders, dividers" },
+    { "text_token": "border", "bg_token": "surface-alt", "text_hex": "#7E8A9C", "bg_hex": "#F4F6FA", "apca_lc": 57.1, "threshold_lc": 45, "category": "ui", "wcag_ratio": "3.23:1", "apca_result": "PASS (Lc 57.1 >= 45 UI)", "wcag_result": "N/A (non-text border; WCAG 1.4.11 requires 3:1 -> PASS)", "usage": "Borders on cards" },
+    { "text_token": "error", "bg_token": "surface", "text_hex": "#B3261E", "bg_hex": "#FFFFFF", "apca_lc": 80.8, "threshold_lc": 60, "category": "body", "wcag_ratio": "6.54:1", "apca_result": "PASS (Lc 80.8 >= 60 body)", "wcag_result": "PASS (6.54:1 >= 4.5:1)", "usage": "Error message text (error states)" },
+    { "text_token": "text-on-primary", "bg_token": "error", "text_hex": "#FFFFFF", "bg_hex": "#B3261E", "apca_lc": -86.0, "threshold_lc": 60, "category": "body", "wcag_ratio": "6.54:1", "apca_result": "PASS (Lc 86.0 >= 60 body)", "wcag_result": "PASS (6.54:1 >= 4.5:1)", "usage": "Text on error chip / inline error banner" },
+    { "text_token": "success", "bg_token": "surface", "text_hex": "#1B7A40", "bg_hex": "#FFFFFF", "apca_lc": 76.4, "threshold_lc": 60, "category": "body", "wcag_ratio": "5.38:1", "apca_result": "PASS (Lc 76.4 >= 60 body)", "wcag_result": "PASS (5.38:1 >= 4.5:1)", "usage": "Success text (upload complete)" },
+    { "text_token": "text-on-primary", "bg_token": "success", "text_hex": "#FFFFFF", "bg_hex": "#1B7A40", "apca_lc": -81.7, "threshold_lc": 60, "category": "body", "wcag_ratio": "5.38:1", "apca_result": "PASS (Lc 81.7 >= 60 body)", "wcag_result": "PASS (5.38:1 >= 4.5:1)", "usage": "Text on success chip / high-confidence solid badge" },
+    { "text_token": "warning", "bg_token": "surface", "text_hex": "#8A5A00", "bg_hex": "#FFFFFF", "apca_lc": 79.3, "threshold_lc": 60, "category": "body", "wcag_ratio": "5.93:1", "apca_result": "PASS (Lc 79.3 >= 60 body)", "wcag_result": "PASS (5.93:1 >= 4.5:1)", "usage": "Warning text" },
+    { "text_token": "text-on-primary", "bg_token": "fallback", "text_hex": "#FFFFFF", "bg_hex": "#8A5A00", "apca_lc": -84.6, "threshold_lc": 60, "category": "body", "wcag_ratio": "5.93:1", "apca_result": "PASS (Lc 84.6 >= 60 body)", "wcag_result": "PASS (5.93:1 >= 4.5:1)", "usage": "Text on FallbackBanner (white on amber)" },
+    { "text_token": "conf-high", "bg_token": "surface", "text_hex": "#1B7A40", "bg_hex": "#FFFFFF", "apca_lc": 76.4, "threshold_lc": 45, "category": "ui", "wcag_ratio": "5.38:1", "apca_result": "PASS (Lc 76.4 >= 45 UI)", "wcag_result": "PASS (5.38:1 >= 4.5:1)", "usage": "ConfidenceMeter HIGH fill bar (confidence >= 0.7)" },
+    { "text_token": "conf-med", "bg_token": "surface", "text_hex": "#8A5A00", "bg_hex": "#FFFFFF", "apca_lc": 79.3, "threshold_lc": 45, "category": "ui", "wcag_ratio": "5.93:1", "apca_result": "PASS (Lc 79.3 >= 45 UI)", "wcag_result": "PASS (5.93:1 >= 4.5:1)", "usage": "ConfidenceMeter MEDIUM fill bar (0.5 <= confidence < 0.7)" },
+    { "text_token": "conf-low", "bg_token": "surface", "text_hex": "#B3261E", "bg_hex": "#FFFFFF", "apca_lc": 80.8, "threshold_lc": 45, "category": "ui", "wcag_ratio": "6.54:1", "apca_result": "PASS (Lc 80.8 >= 45 UI)", "wcag_result": "PASS (6.54:1 >= 4.5:1)", "usage": "ConfidenceMeter LOW fill bar (confidence < 0.5)" },
+    { "text_token": "conf-high", "bg_token": "surface", "text_hex": "#1B7A40", "bg_hex": "#FFFFFF", "apca_lc": 76.4, "threshold_lc": 30, "category": "large", "wcag_ratio": "5.38:1", "apca_result": "PASS (Lc 76.4 >= 30 large)", "wcag_result": "PASS (5.38:1 >= 4.5:1)", "usage": "Large confidence % numeral (high) as solid-colored large text" }
+  ],
+  "summary": {
+    "total_pairs": 22,
+    "apca_pass": 22,
+    "apca_fail": 0,
+    "wcag_text_pairs": 20,
+    "wcag_text_pass": 20,
+    "wcag_text_fail": 0,
+    "non_text_border_pairs": 2,
+    "non_text_border_wcag_1411_pass": 2,
+    "overall": "PASS",
+    "verdict": "All 22 token pairs meet APCA thresholds (body Lc>=60, UI Lc>=45, large Lc>=30). All 20 text pairs meet WCAG 4.5:1. The 2 non-text border pairs meet WCAG 1.4.11 (3:1). No remediation required."
+  },
+  "keyboard_navigation": {
+    "standard": "GIGW v3.0 + WCAG 2.1 (2.1.1 Keyboard, 2.4.7 Focus Visible)",
+    "global": {
+      "focus_indicator": "3px solid --color-focus-ring, 2px offset, applied via :focus-visible to all interactive elements",
+      "min_tap_target": "44px (--tap-target-min)",
+      "skip_link": "First Tab focus is a 'Skip to chat composer' / 'Skip to main content' link on every screen",
+      "reduced_motion": "@media (prefers-reduced-motion: reduce) zeroes streaming/animation durations"
+    },
+    "per_screen": [
+      { "screen": "UploadLibrary", "tab_order": "Skip-link -> Logo -> Nav -> UploadDropzone (Enter/Space opens file dialog) -> DocumentLibrary cards (Arrow keys move, Enter opens) -> per-card delete button", "notes": "UploadDropzone is a labelled button-region; drag-drop has a keyboard-accessible 'Browse files' fallback. Delete asks for confirm (focus moves into dialog, Esc cancels)." },
+      { "screen": "DocumentView", "tab_order": "Skip-link -> Nav -> TocSidebar entries (Up/Down arrow tree nav, Enter selects, Right/Left expand/collapse L1/L2) -> main content -> 'Ask about this document' button", "notes": "TocSidebar implements ARIA tree (role=tree/treeitem, aria-expanded, aria-level). Selected section announced via aria-current." },
+      { "screen": "Chat", "tab_order": "Skip-link -> Nav -> FallbackBanner (if shown, role=alert) -> message list (arrow-key navigable) -> ConfidenceMeter (focusable, value read via aria-valuenow) -> CitationCard list (Enter jumps to page) -> ExplainabilityPanel disclosure (Enter toggles) -> composer textarea -> Send button", "notes": "Streaming answer region is aria-live=polite so tokens are announced without stealing focus. ExplainabilityPanel uses a disclosure (button[aria-expanded]) controlling a region. CitationCard 'Jump to page N' is a link/button." },
+      { "screen": "States (empty/loading/error)", "tab_order": "Loading: focus parked on a status region (aria-busy=true, aria-live=polite). Error: focus moves to retry button; Problem.detail read via role=alert. Empty: focus on the primary call-to-action.", "notes": "No keyboard trap in any state; Esc dismisses non-blocking toasts." }
+    ]
+  },
+  "wcag_aa_notes": {
+    "1.4.3_contrast_minimum": "Superseded by APCA per RPwD s40; all text also independently meets WCAG AA 4.5:1 (large text 3:1).",
+    "1.4.11_non_text_contrast": "Borders (#7E8A9C) and ConfidenceMeter fills meet >= 3:1 against their surfaces.",
+    "1.4.1_use_of_color": "Confidence level is NOT conveyed by color alone: ConfidenceMeter shows the numeric percentage and a High/Medium/Low text label plus an icon; FallbackBanner carries an explicit text message and icon, not just amber.",
+    "2.1.1_keyboard": "Every interaction (upload, TOC navigation, citation jump, explainability toggle, send) is keyboard operable; documented per-screen above.",
+    "2.4.7_focus_visible": "Global :focus-visible 3px ring token.",
+    "4.1.2_name_role_value": "Custom components specify ARIA roles: ConfidenceMeter=role meter/progressbar with aria-valuenow/min/max/text; ExplainabilityPanel=disclosure; TocSidebar=tree; FallbackBanner=alert; streaming answer=aria-live region.",
+    "1.4.10_reflow": "Layout reflows to a single column below 768px (TocSidebar collapses to a drawer); no horizontal scroll at 320px.",
+    "2.3.3_animation_from_interactions": "Reduced-motion media query disables streaming/transition animation."
+  }
+}

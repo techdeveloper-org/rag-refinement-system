@@ -72,7 +72,20 @@ app/build/
 # Build artifacts — Docker
 docker-compose.override.yml
 
+# Note: uml/ and drawio/ (Phase 5 diagram suite) are intentionally TRACKED in git
+# — they are part of the product documentation and shipped artifacts, per user decision.
+
 # Temp
 *.tmp
 *.temp
 *.bak
+
+# Coverage data file
+.coverage
+.coverage.*
+
+# detect-secrets: scan output (ephemeral); baseline is tracked
+.secrets.scan.json
+
+# TypeScript incremental build cache
+*.tsbuildinfo

@@ -1,0 +1,150 @@
+{
+  "$comment": "Phase 8 (TODO-09) Pre-Implementation Alignment IR.2 Resolution Log. Each Sprint-1 story's assigned Phase B dev_agent self-reviewed its own three Phase 7 CoT prompts (implementation_execution_plan.json) plus its isolated context window (ar3_context_windows.json) against its acceptance criteria (SRS.md), the GRAND BLUEPRINT (hld_v3.md + design_spec_v2_notes.md), the grand advisory watchlist (grand_advisory_items.json), and the DAG ordering (ar2_dag_proof.json). Each agent emitted one flag record across five flag types: AC_AMBIGUITY, MISSING_CONTEXT, SKILL_GAP, DEPENDENCY_CONFLICT, ARCHITECTURE_GAP/DESIGN_MISMATCH. BA + PM + SA + scrum-master-agent stood by to resolve any flag in-session. RESULT: all 11 stories self-reported CLEAR -> FAST PATH. No prompt or context repair required. Maker-Checker (review_agent != dev_agent) verified intact on every story. DPDP PII isolation verified intact in every context window (field-name/metadata only; no PII values). Source: ar1_assignments.json, implementation_execution_plan.json, ar3_context_windows.json, ar2_dag_proof.json, sprint_1_backlog.md, grand_advisory_items.json, hld_v3.md, SRS.md, _common_context.md.",
+  "generated": "2026-06-06",
+  "phase": "8",
+  "artifact": "IR.2",
+  "mode": "A-greenfield",
+  "fast_path": true,
+  "resolution_rounds_used": 0,
+  "max_resolution_rounds": 3,
+  "reviewers_standing_by": ["business-analyst-agent", "product-manager-agent", "solution-architect", "scrum-master-agent"],
+  "flag_types_checked": ["AC_AMBIGUITY", "MISSING_CONTEXT", "SKILL_GAP", "DEPENDENCY_CONFLICT", "ARCHITECTURE_GAP", "DESIGN_MISMATCH", "SECURITY_SCOPE_UNCLEAR"],
+  "story_resolutions": [
+    {
+      "story_id": "STORY-001",
+      "title": "PostgreSQL structure schema + migrations",
+      "dev_agent": "database-engineer",
+      "review_agent": "python-backend-engineer",
+      "self_review_verdict": "CLEAR",
+      "flags_raised": [],
+      "review_notes": "dev/qa/review prompts each carry the Context Budget header (12000 tokens). AGREED CONTRACT documents/sections columns are explicit; tenant_id NOT NULL on every row, pii_flags jsonb, residency_region, page_start<=page_end constraint, forward+rollback migrations all specified. AC-003/AC-024 referenced and satisfiable from the window (pg-schema-delta + dpdp-compliance-delta + hld.md 4.1/4.2 + ADR-10). No ambiguity, no missing context, in-stack (Postgres) for database-engineer, no upstream dependency (DAG wave 0 in-degree 0). Maker!=Checker (python-backend-engineer reviews as downstream consumer).",
+      "resolution": "CLEAR - no resolution needed."
+    },
+    {
+      "story_id": "STORY-038",
+      "title": "Auth: API keys + OAuth2/JWT + tenant substrate",
+      "dev_agent": "python-backend-engineer",
+      "review_agent": "auth-security-specialist",
+      "self_review_verdict": "CLEAR",
+      "flags_raised": [],
+      "review_notes": "ADR-7 (API keys + OAuth2/JWT), ADV-003 (rate-limit on authenticated ops), NFR-015 (tenant scoping) all present. Hashed-at-rest key store, JWT sig+exp+aud, no alg=none, RFC-7807 401/403 specified. Window (auth-schema-delta + threat-model-delta scoped to auth surface) is sufficient; correctly excludes ingestion/router/Qdrant context. DAG places STORY-038 in wave 1 after STORY-001 (wave 0) so the tenant_id column exists before auth scopes it - no dependency conflict. P1 security override: auth-security-specialist is the canonical Phase-F checker (Maker!=Checker). No PII in window (auth deals in credentials/tenant scope).",
+      "resolution": "CLEAR - no resolution needed."
+    },
+    {
+      "story_id": "STORY-002",
+      "title": "Qdrant collection + payload schema",
+      "dev_agent": "database-engineer",
+      "review_agent": "data-engineer",
+      "self_review_verdict": "CLEAR",
+      "flags_raised": [],
+      "review_notes": "Payload {chunk_id, section_id, doc_id, page, tenant_id} matches the AGREED CONTRACT; vector size 1536 matches ADR-6 text-embedding-3-small; payload indexes on section_id AND tenant_id; idempotent create-if-absent. ADR-2 in window. Single-chunk minimal 9000-token window is sufficient and isolated (no Postgres DDL, no router/API). DAG wave 0 in-degree 0. Maker!=Checker (data-engineer reviews as the embed+upsert consumer of this payload).",
+      "resolution": "CLEAR - no resolution needed."
+    },
+    {
+      "story_id": "STORY-004",
+      "title": "Service skeleton: Docker + /health + /ready",
+      "dev_agent": "devops-engineer",
+      "review_agent": "python-backend-engineer",
+      "self_review_verdict": "CLEAR",
+      "flags_raised": [],
+      "review_notes": "getHealth/getReadiness operationIds, /ready 503-on-dependency-down (Postgres+Qdrant), non-root image, no secrets baked in, 12-factor env injection - all explicit. NFR-009 + AGREED CONTRACT (devops <-> all implementers) in window. Infra-level, no PII, no application-domain context needed. DAG wave 0 in-degree 0. Maker!=Checker (backend reviews probe wiring from the service-host side).",
+      "resolution": "CLEAR - no resolution needed."
+    },
+    {
+      "story_id": "STORY-005",
+      "title": "CI: lint + type + unit + SAST + secrets scan",
+      "dev_agent": "devops-engineer",
+      "review_agent": "secrets-detection-specialist",
+      "self_review_verdict": "CLEAR",
+      "flags_raised": [],
+      "review_notes": "lint->typecheck->unit->SAST->secrets->SCA stages, hard-block on planted hardcoded key, Python+TS stacks, fixture exclusion patterns, OpenAPI contract-test stage (NFR-010). threat-model-delta scoped to the secrets/SAST policy in window. NFR-007/NFR-010 referenced. DAG wave 0 in-degree 0. Maker!=Checker (canonical Phase-F secrets-detection-specialist reviews the security gate).",
+      "resolution": "CLEAR - no resolution needed."
+    },
+    {
+      "story_id": "STORY-008",
+      "title": "PDF upload + extraction (POST /v1/documents)",
+      "dev_agent": "python-backend-engineer",
+      "review_agent": "data-engineer",
+      "self_review_verdict": "CLEAR",
+      "flags_raised": [],
+      "review_notes": "ingestDocument operationId, IngestResponse {doc_id, ingest_status, toc...}, content-hash idempotency (re-upload reuses doc_id), tenant_id stamped, RFC-7807 4xx/5xx, ADV-001 traceability-header scalar fix (fr_mapped_to_api=23/fr_non_api=6, mapping entries unchanged) - all explicit. File bytes treated as runtime data, not prompt context (PII isolation). Window (api-contract-delta + ingestion-pipeline-delta) sufficient. DAG wave 1 after auth (038) and schema (001). Maker!=Checker (data-engineer reviews the ingest_document handoff it owns).",
+      "resolution": "CLEAR - no resolution needed."
+    },
+    {
+      "story_id": "STORY-009",
+      "title": "Native TOC extraction (Scenario A)",
+      "dev_agent": "data-engineer",
+      "review_agent": "python-backend-engineer",
+      "self_review_verdict": "CLEAR",
+      "flags_raised": [],
+      "review_notes": "PyMuPDF get_toc() (ADR-4), [{level,title,page_start,page_end}], page_end = next-sibling.page_start-1 (last ends at total_pages), section rows per STORY-001 schema with tenant_id, page->section interval map - all explicit. toc-dsa-delta defines the interval mapping in window. AC-002 referenced. DAG wave 2 after upload (008). TOC = structural metadata, not PII. Maker!=Checker (backend reviews as the IngestResponse.toc serializer).",
+      "resolution": "CLEAR - no resolution needed."
+    },
+    {
+      "story_id": "STORY-003",
+      "title": "Embedding + idempotent upsert pipeline",
+      "dev_agent": "data-engineer",
+      "review_agent": "database-engineer",
+      "self_review_verdict": "CLEAR",
+      "flags_raised": [],
+      "review_notes": "text-embedding-3-small primary + BGE-M3 fallback (ADR-6), deterministic point id from content hash (idempotent, no duplicate points), full payload incl. tenant_id matching STORY-002, OPENAI_API_KEY via env only. Window (ingestion-pipeline-delta + qdrant-payload-delta) sufficient. DAG wave 4 - correctly the last wave, after chunks (011, wave 3) and Qdrant payload (002, wave 0); the dev prompt's 'embed section-aware chunks (from STORY-011)' dependency is satisfied by the wave ordering. Chunk text is runtime data, not prompt context. Maker!=Checker (database-engineer verifies upsert honors the payload schema/index).",
+      "resolution": "CLEAR - no resolution needed."
+    },
+    {
+      "story_id": "STORY-011",
+      "title": "Section-aware 3-level chunking",
+      "dev_agent": "data-engineer",
+      "review_agent": "ai-engineer",
+      "self_review_verdict": "CLEAR",
+      "flags_raised": [],
+      "review_notes": "No chunk crosses a section boundary (AGREED CONTRACT), L1/L2/L3 chunks bounded within section page/offset ranges, deterministic stable chunk_id from content (golden fixtures reproduce), {chunk_id, section_id, doc_id, page, tenant_id} on every chunk - all explicit. P0-risk -> deterministic golden fixtures mandated and present in the qa prompt. Window (ingestion-pipeline-delta + pg-schema-delta + toc-dsa-delta) carries section-boundary authority. DAG wave 3 after TOC (009, wave 2). Maker!=Checker (ai-engineer reviews as the scoped-retrieval consumer that depends on clean section boundaries).",
+      "resolution": "CLEAR - no resolution needed."
+    },
+    {
+      "story_id": "STORY-014",
+      "title": "LangGraph router node (Claude 3 Haiku)",
+      "dev_agent": "ai-engineer",
+      "review_agent": "threat-modeling-specialist",
+      "self_review_verdict": "CLEAR",
+      "flags_raised": [],
+      "review_notes": "ADR-1/ADR-3 (Claude 3 Haiku in a LangGraph node, in-process async, never calls the generation LLM), RouterOutput contract {relevant_sections[], page_ranges[], confidence[], fallback, routing_time_ms, rationale} (HLD 7.1), routing_time_ms in [100,300] (AC-005), strict system/role separation + strict-JSON output schema + reject non-JSON -> deterministic fallback (ADV-004, NFR-008 OWASP-LLM01), confidence-thresholded top-K, prompt-injection fixtures - all explicit. Document text + user query treated as UNTRUSTED; no PII in prompt. Largest window (16000 tokens) carries router-contract + toc-dsa + fallback-graph + threat-model deltas. DAG wave 1 (router needs only section metadata at routing time, not chunks at build time - no conflict with the wave-3/4 chunk stories). Maker!=Checker P1 LLM-security (threat-modeling-specialist, OWASP LLM Top-10).",
+      "resolution": "CLEAR - no resolution needed."
+    },
+    {
+      "story_id": "STORY-034",
+      "title": "DPDP access + x-pii inventory (FR-029)",
+      "dev_agent": "python-backend-engineer",
+      "review_agent": "security-compliance-mapper",
+      "self_review_verdict": "CLEAR",
+      "flags_raised": [],
+      "review_notes": "exportDocumentData (GET /v1/documents/{id}/data) returning DataAccessExport{...pii_fields[]} (DPDP Act 2023 sec.8), pii_fields[] enumerated from x-pii FIELD NAMES (never hardcoded PII values), tenant_id scope + IDOR guard (cross-tenant {id} -> 403/404), RFC-7807 404/403 - all explicit. AC-026/AC-029 referenced. Window carries x-pii field NAMES + the schema pii_flags flag only (the single story intentionally touching PII metadata); NO PII VALUES, NO cross-tenant data - DPDP minimization preserved. DAG wave 2 after auth (038, wave 1). Maker!=Checker P1 PII/compliance (security-compliance-mapper, DPDP mapping).",
+      "resolution": "CLEAR - no resolution needed."
+    }
+  ],
+  "summary": {
+    "total_stories": 11,
+    "clear_stories": 11,
+    "flagged_stories": 0,
+    "p1_flags": 0,
+    "p2_flags": 0,
+    "flag_breakdown": {
+      "AC_AMBIGUITY": 0,
+      "MISSING_CONTEXT": 0,
+      "SKILL_GAP": 0,
+      "DEPENDENCY_CONFLICT": 0,
+      "ARCHITECTURE_GAP": 0,
+      "DESIGN_MISMATCH": 0,
+      "SECURITY_SCOPE_UNCLEAR": 0
+    },
+    "all_p1_resolved": true,
+    "unresolved_count": 0,
+    "prompt_repairs_needed": 0,
+    "context_repairs_needed": 0,
+    "re_routes": 0,
+    "maker_checker_intact": true,
+    "dpdp_pii_isolation_intact": true,
+    "dag_ordering_consistent_with_prompt_dependencies": true,
+    "fast_path_triggered": true,
+    "github_calls_made": false
+  }
+}

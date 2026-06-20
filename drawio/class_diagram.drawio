@@ -1,0 +1,64 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram id="class_diagram" name="Class Diagram">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="850" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="cdoc" value="Document&#10;+doc_id&#10;+content_hash&#10;+title&#10;+total_pages&#10;+domain&#10;+tenant_id&#10;+residency_region&#10;+fallback_only&#10;+created_at" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="40" y="40" width="180" height="170" as="geometry"/>
+        </mxCell>
+        <mxCell id="csec" value="Section&#10;+section_id&#10;+doc_id&#10;+title&#10;+level&#10;+page_start&#10;+page_end&#10;+summary&#10;+pii_flags" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="300" y="40" width="180" height="160" as="geometry"/>
+        </mxCell>
+        <mxCell id="cchunk" value="Chunk&#10;+chunk_id&#10;+section_id&#10;+doc_id&#10;+page&#10;+tenant_id&#10;+embedding" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="560" y="40" width="180" height="130" as="geometry"/>
+        </mxCell>
+        <mxCell id="cro" value="RouterOutput&#10;+relevant_sections[]&#10;+page_ranges[][]&#10;+confidence[]&#10;+fallback&#10;+routing_time_ms&#10;+rationale" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="40" y="280" width="190" height="130" as="geometry"/>
+        </mxCell>
+        <mxCell id="crel" value="RelevantSection&#10;+section_id&#10;+document_id&#10;+title&#10;+page_start&#10;+page_end&#10;+confidence" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="300" y="280" width="180" height="130" as="geometry"/>
+        </mxCell>
+        <mxCell id="ccite" value="Citation&#10;+section_id&#10;+section_title&#10;+page_start&#10;+page_end" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="560" y="280" width="170" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="crs" value="RoutingSummary&#10;+sections[]&#10;+confidence[]&#10;+fallback&#10;+rationale" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="300" y="470" width="180" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="cafe" value="AnswerFinalEvent&#10;+query_id&#10;+answer&#10;+citations[]&#10;+routing" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="560" y="470" width="180" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="cpii" value="PiiField&#10;+field&#10;+location&#10;+category" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="40" y="470" width="170" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="e1" style="endArrow=diamondThin;endFill=0;html=1;" edge="1" parent="1" source="cdoc" target="csec">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e2" style="endArrow=diamondThin;endFill=0;html=1;" edge="1" parent="1" source="csec" target="cchunk">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e3" style="endArrow=diamondThin;endFill=1;html=1;" edge="1" parent="1" source="cro" target="crel">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e4" style="endArrow=open;dashed=1;html=1;" edge="1" parent="1" source="crel" target="csec">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e5" style="endArrow=diamondThin;endFill=1;html=1;" edge="1" parent="1" source="cafe" target="ccite">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e6" style="endArrow=diamondThin;endFill=1;html=1;" edge="1" parent="1" source="cafe" target="crs">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e7" style="endArrow=open;dashed=1;html=1;" edge="1" parent="1" source="ccite" target="csec">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e8" style="endArrow=diamondThin;endFill=0;html=1;" edge="1" parent="1" source="cdoc" target="cpii">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="note" value="Source: HLD section 4 + 7 / openapi.yaml. section_id is the universal join key. Mermaid source: uml/class_diagram.md" style="text;html=1;align=left;verticalAlign=top;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="40" y="610" width="700" height="30" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
