@@ -1,4 +1,4 @@
-"""Ingestion pipeline orchestration (STORY-003/008/009/011).
+﻿"""Ingestion pipeline orchestration (STORY-003/008/009/011).
 
 Implements the data-engineer-owned ``ingest_document`` entry point that backend
 calls: parse -> TOC -> section-aware chunk -> embed -> upsert, writing section
@@ -172,6 +172,23 @@ class SectionStore(Protocol):
 
         Returns:
             The number of section rows written.
+        """
+        ...
+
+    def update_residency_region(self, doc_id: str, tenant_id: str, residency_region: str) -> None:
+        """Update the residency_region for a document after ingestion (DPDP FR-028).
+
+        Called after the pipeline completes to stamp the data-residency region that
+        the synchronous pipeline cannot persist because ``IngestInput`` carries no
+        residency field.
+
+        Args:
+            doc_id: Document primary key.
+            tenant_id: Owning tenant (IDOR guard).
+            residency_region: One of IN, EU, US, GLOBAL.
+
+        Raises:
+            DependencyUnavailable: When the structure store is unreachable.
         """
         ...
 

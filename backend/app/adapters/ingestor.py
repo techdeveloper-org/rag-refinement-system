@@ -1,4 +1,4 @@
-"""Ingestor adapter binding ``ingestion.ingest_document`` to the backend Protocol.
+﻿"""Ingestor adapter binding ``ingestion.ingest_document`` to the backend Protocol.
 
 The backend :class:`Ingestor` Protocol is ``ingest_document(tenant_id, content,
 filename, title, domain, no_retention, residency_region, ocr) -> IngestOutcome``.
@@ -26,6 +26,7 @@ from collections.abc import Callable
 from typing import Any
 
 import anyio
+import logging
 
 from backend.app.api.interfaces import DependencyUnavailable, IngestOutcome, SectionRecord
 from ingestion import section_id_for
@@ -40,6 +41,8 @@ from ingestion.toc_extractor import LlmRefiner
 
 IngestCallable = Callable[..., dict[str, Any]]
 """Signature of ``ingestion.ingest_document`` (kept injectable for tests)."""
+
+_logger = logging.getLogger(__name__)
 
 _INGEST_STATUS_FALLBACK = "fallback_only"
 _INGEST_STATUS_EPHEMERAL = "ephemeral"
@@ -222,11 +225,24 @@ class PipelineIngestor:
 
         if not no_retention and residency_region != "GLOBAL":
             try:
-                self._section_store.update_residency_region(
-                    doc_id_str, tenant_id, residency_region
+                await anyio.to_thread.run_sync(
+                    lambda: self._section_store.update_residency_region(
+                        doc_id_str, tenant_id, residency_region
+                    )
                 )
             except Exception:
-                pass
+                _logger.error(
+                    "Failed to update residency_region after ingest",
+                    extra={
+                        "doc_id": doc_id_str,
+                        "tenant_id": tenant_id,
+                        "residency_region": residency_region,
+                    },
+                    exc_info=True,
+                )
+                raise DependencyUnavailable(
+                    f"Residency region update failed for doc {doc_id_str}; DPDP FR-028 compliance at risk."
+                )
 
         toc = list(result.get("toc") or [])
         fallback_only = bool(result.get("fallback_only", False))
