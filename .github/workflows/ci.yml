@@ -38,7 +38,7 @@ jobs:
       - name: Install dev dependencies
         run: pip install ".[dev]"
       - name: Mypy typecheck
-        run: mypy backend ingestion
+        run: mypy backend ingestion router db
 
   test:
     runs-on: ubuntu-latest
@@ -50,7 +50,7 @@ jobs:
       - name: Install dev dependencies
         run: pip install ".[dev]"
       - name: Pytest
-        run: pytest -q
+        run: pytest -q --cov=backend --cov=ingestion --cov=router --cov=db --cov-fail-under=80
 
   security:
     runs-on: ubuntu-latest

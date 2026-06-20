@@ -63,7 +63,7 @@ def _doc(doc_id: str, tenant_id: str, *, total_pages: int = 10, title: str = "T"
         domain="legal",
         residency_region="IN",
         fallback_only=False,
-        created_at=_dt.datetime(2026, 6, 6, tzinfo=_dt.UTC).isoformat(),
+        created_at=_dt.datetime(2026, 6, 6, tzinfo=_dt.timezone.utc).isoformat(),
         pii_flags={},
     )
 

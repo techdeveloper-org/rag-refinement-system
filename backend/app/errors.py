@@ -243,12 +243,14 @@ def rate_limited(
 def service_unavailable(
     detail: str = "A required dependency is unreachable.",
     retry_after_seconds: int = 5,
+    query_id: str | None = None,
 ) -> ProblemException:
     """Build a 503 SERVICE_UNAVAILABLE problem (ADV-002 deleteDocument).
 
     Args:
         detail: Occurrence-specific explanation.
         retry_after_seconds: Seconds until the caller may retry.
+        query_id: Optional correlation id for mid-stream error frames.
 
     Returns:
         A configured :class:`ProblemException`.
@@ -260,16 +262,19 @@ def service_unavailable(
         detail=detail,
         problem_type="service-unavailable",
         headers={"Retry-After": str(retry_after_seconds)},
+        query_id=query_id,
     )
 
 
 def internal_error(
     detail: str = "An unexpected error occurred. The incident has been logged.",
+    query_id: str | None = None,
 ) -> ProblemException:
     """Build a 500 INTERNAL_ERROR problem.
 
     Args:
         detail: Generic explanation that never exposes internals.
+        query_id: Optional correlation id for mid-stream error frames.
 
     Returns:
         A configured :class:`ProblemException`.
@@ -280,6 +285,7 @@ def internal_error(
         title="Internal Server Error",
         detail=detail,
         problem_type="internal-error",
+        query_id=query_id,
     )
 
 

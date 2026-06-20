@@ -10,6 +10,7 @@ parsing and validation (see ``router.schema``).
 
 from __future__ import annotations
 
+import logging
 import os
 from typing import Protocol, runtime_checkable
 
@@ -125,6 +126,10 @@ class ClaudeHaikuRouterLLM:
         for block in response.content:
             if getattr(block, "type", None) == "text":
                 parts.append(block.text)
+        if not parts:
+            logging.getLogger(__name__).warning(
+                "RouterLLM.complete returned no text blocks; model=%s", self._model
+            )
         return "".join(parts)
 
 

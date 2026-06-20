@@ -1,9 +1,8 @@
 """Tests for the readiness-probe internals in ``backend.app.health``.
 
-These exercise ``_check_postgres`` (TCP connect), ``_check_qdrant`` (HTTP probe),
-and ``evaluate_readiness`` (aggregation + degraded status), which the endpoint
-tests cannot reach without real dependencies. Sockets and HTTP are stubbed so no
-real PostgreSQL or Qdrant is contacted.
+These exercise ``_check_postgres`` (asyncpg real-auth probe), ``_check_qdrant``
+(HTTP probe), and ``evaluate_readiness`` (aggregation + degraded status).
+All network I/O is stubbed so no real PostgreSQL or Qdrant is contacted.
 """
 
 from __future__ import annotations
@@ -22,77 +21,75 @@ def anyio_backend() -> str:
     return "asyncio"
 
 
-class _FakeWriter:
-    """Minimal asyncio StreamWriter stub for the postgres TCP probe."""
+class _FakeConn:
+    """Minimal asyncpg connection stub that succeeds the SELECT 1 probe."""
 
-    def close(self) -> None:
+    async def execute(self, sql: str) -> None:
+        """Accept any SQL without error."""
+
+    async def close(self) -> None:
         """No-op close."""
-
-    async def wait_closed(self) -> None:
-        """No-op async close."""
 
 
 class TestCheckPostgres:
-    """``_check_postgres`` TCP-connect branches."""
+    """``_check_postgres`` asyncpg-connect branches."""
 
     async def test_returns_false_when_host_missing(self) -> None:
-        """A DSN with no host is reported as down."""
+        """A DSN that asyncpg cannot parse or connect to is reported as down."""
         result = await health._check_postgres("postgresql:///db", 0.1)
         assert result is False
 
-    async def test_returns_true_on_successful_connect(
+    async def test_returns_true_on_successful_authenticated_query(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """A successful TCP connect reports the dependency up."""
+        """A successful asyncpg connect + SELECT 1 reports postgres up."""
 
-        async def _fake_open_connection(host: str, port: int):
-            return (object(), _FakeWriter())
+        async def _fake_connect(url: str, **kwargs: object) -> _FakeConn:
+            return _FakeConn()
 
-        import asyncio
+        import asyncpg
 
-        monkeypatch.setattr(asyncio, "open_connection", _fake_open_connection)
-        result = await health._check_postgres(
-            "postgresql://db-host:5432/db", 0.5
-        )
+        monkeypatch.setattr(asyncpg, "connect", _fake_connect)
+        result = await health._check_postgres("postgresql://h:5432/db", 0.5)
         assert result is True
 
-    async def test_returns_true_when_wait_closed_raises(
+    async def test_returns_false_on_authentication_failure(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """A wait_closed failure after a successful connect is swallowed (still up)."""
+        """Wrong credentials report postgres down even when the host is reachable.
 
-        class _RaisingWriter:
-            def close(self) -> None:
+        This distinguishes the TCP-open but bad-credentials case from a network
+        failure, verifying that the probe requires a real authenticated query.
+        """
+
+        class _BadCredsConn:
+            async def execute(self, sql: str) -> None:
+                raise Exception("FATAL: password authentication failed for user")
+
+            async def close(self) -> None:
                 pass
 
-            async def wait_closed(self) -> None:
-                raise OSError("already closed")
+        async def _fake_connect(url: str, **kwargs: object) -> _BadCredsConn:
+            return _BadCredsConn()
 
-        async def _fake_open_connection(host: str, port: int):
-            return (object(), _RaisingWriter())
+        import asyncpg
 
-        import asyncio
-
-        monkeypatch.setattr(asyncio, "open_connection", _fake_open_connection)
-        result = await health._check_postgres(
-            "postgresql://db-host:5432/db", 0.5
-        )
-        assert result is True
+        monkeypatch.setattr(asyncpg, "connect", _fake_connect)
+        result = await health._check_postgres("postgresql://h:5432/db", 0.5)
+        assert result is False
 
     async def test_returns_false_on_connect_error(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """A refused/failed TCP connect reports the dependency down."""
+        """A refused/failed TCP connect reports postgres down."""
 
-        async def _raise(host: str, port: int):
+        async def _raise(url: str, **kwargs: object) -> object:
             raise OSError("connection refused")
 
-        import asyncio
+        import asyncpg
 
-        monkeypatch.setattr(asyncio, "open_connection", _raise)
-        result = await health._check_postgres(
-            "postgresql://db-host:5432/db", 0.5
-        )
+        monkeypatch.setattr(asyncpg, "connect", _raise)
+        result = await health._check_postgres("postgresql://h:5432/db", 0.5)
         assert result is False
 
 

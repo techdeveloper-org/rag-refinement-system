@@ -338,4 +338,6 @@ def test_result_dict_has_full_contract_shape(scenario_a_doc: ParsedDocument) -> 
         "section_rows_written",
         "chunks_upserted",
         "fallback_only",
+        "total_pages",
+        "pre_existing",
     }

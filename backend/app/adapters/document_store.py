@@ -17,6 +17,9 @@ the API layer maps to a retryable 503 (ADV-002).
 from __future__ import annotations
 
 import datetime as _dt
+import logging
+
+_logger = logging.getLogger(__name__)
 
 from db.models import Document, ErasureOutbox, Section
 from sqlalchemy import func, select
@@ -211,10 +214,11 @@ class SqlAlchemyDocumentStore:
         )
         try:
             async with self._session_factory() as session:
-                live_doc_id = (await session.execute(doc_stmt)).scalar_one_or_none()
-                if live_doc_id is None:
-                    return []
-                rows = (await session.execute(section_stmt)).scalars().all()
+                async with session.begin():
+                    live_doc_id = (await session.execute(doc_stmt)).scalar_one_or_none()
+                    if live_doc_id is None:
+                        return []
+                    rows = (await session.execute(section_stmt)).scalars().all()
         except SQLAlchemyError as exc:
             raise DependencyUnavailable("structure store unreachable") from exc
         return [_to_section_record(row) for row in rows]
@@ -252,12 +256,7 @@ class SqlAlchemyDocumentStore:
                     row = (await session.execute(stmt)).scalar_one_or_none()
                     if row is None:
                         return False
-                    row.tombstoned_at = _dt.datetime.now(_dt.UTC)
-                    try:
-                        from router.graph import invalidate_toc_cache
-                        invalidate_toc_cache(doc_id)
-                    except ImportError:
-                        pass
+                    row.tombstoned_at = _dt.datetime.now(_dt.timezone.utc)
                     for store in _ERASURE_STORES:
                         session.add(
                             ErasureOutbox(
@@ -269,4 +268,13 @@ class SqlAlchemyDocumentStore:
                         )
         except SQLAlchemyError as exc:
             raise DependencyUnavailable("structure store unreachable") from exc
+
+        try:
+            from router.graph import invalidate_toc_cache
+            invalidate_toc_cache(doc_id)
+        except ImportError:
+            pass
+        except Exception:
+            _logger.warning("TOC cache invalidation failed for doc_id=%s", doc_id, exc_info=True)
+
         return True

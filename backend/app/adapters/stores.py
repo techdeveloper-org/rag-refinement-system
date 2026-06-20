@@ -126,6 +126,12 @@ class SqlAlchemySectionStore:
     def replace_sections(self, tenant_id: str, doc_id: str, rows: list[SectionRow]) -> int:
         """Replace all sections for ``doc_id`` with ``rows`` (idempotent).
 
+        **Caller contract:** When ``rows`` is empty this method returns 0
+        without deleting existing sections. Callers that need to clear
+        sections as part of a re-ingest cycle must use
+        :meth:`upsert_document_and_replace_sections`, which unconditionally
+        deletes before inserting.
+
         Args:
             tenant_id: Owning tenant (cross-tenant delete guard).
             doc_id: Document whose sections are replaced.
@@ -157,8 +163,8 @@ class SqlAlchemySectionStore:
                             level=row.level,
                             page_start=row.page_start,
                             page_end=row.page_end,
-                            summary=getattr(row, 'summary', None),
-                            pii_flags=getattr(row, 'pii_flags', {}) or {},
+                            summary=None,
+                            pii_flags={},
                         )
                     )
                 return len(rows)
@@ -239,8 +245,8 @@ class SqlAlchemySectionStore:
                             level=row.level,
                             page_start=row.page_start,
                             page_end=row.page_end,
-                            summary=getattr(row, 'summary', None),
-                            pii_flags=getattr(row, 'pii_flags', {}) or {},
+                            summary=None,
+                            pii_flags={},
                         )
                     )
                 return len(rows)

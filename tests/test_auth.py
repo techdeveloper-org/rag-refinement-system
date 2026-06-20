@@ -81,7 +81,7 @@ def test_wrong_audience_jwt_rejected(client: TestClient) -> None:
     """A JWT for a different audience is rejected."""
     import datetime as _dt
 
-    now = _dt.datetime.now(_dt.UTC)
+    now = _dt.datetime.now(_dt.timezone.utc)
     token = jwt.encode(
         {
             "sub": "u",
@@ -186,3 +186,138 @@ def test_cross_tenant_jwt_cannot_read_other_tenant_doc(client: TestClient) -> No
     response = client.get("/v1/documents/doc_abc123", headers=headers)
     assert response.status_code == 404
     assert response.json()["code"] == "DOCUMENT_NOT_FOUND"
+
+
+# ---------------------------------------------------------------------------
+# JWT tenant_id type-enforcement tests (fix #92)
+# ---------------------------------------------------------------------------
+
+
+def test_jwt_tenant_id_list_returns_401() -> None:
+    """A JWT carrying a list tenant_id is rejected as a non-string claim."""
+    import datetime as _dt
+
+    from backend.app.errors import ProblemException
+    from backend.app.security.auth import _resolve_jwt_principal
+
+    now = _dt.datetime.now(_dt.timezone.utc)
+    token = jwt.encode(
+        {
+            "sub": "u",
+            "tenant_id": ["tenant_a", "tenant_b"],
+            "aud": JWT_AUDIENCE,
+            "iss": JWT_ISSUER,
+            "exp": now + _dt.timedelta(hours=1),
+        },
+        JWT_SECRET,
+        algorithm="HS256",
+    )
+    settings = get_settings()
+    with pytest.raises(ProblemException) as exc_info:
+        _resolve_jwt_principal(token, settings)
+    assert exc_info.value.status_code == 401
+
+
+def test_jwt_tenant_id_int_returns_401() -> None:
+    """A JWT carrying an integer tenant_id is rejected as a non-string claim."""
+    import datetime as _dt
+
+    from backend.app.errors import ProblemException
+    from backend.app.security.auth import _resolve_jwt_principal
+
+    now = _dt.datetime.now(_dt.timezone.utc)
+    token = jwt.encode(
+        {
+            "sub": "u",
+            "tenant_id": 42,
+            "aud": JWT_AUDIENCE,
+            "iss": JWT_ISSUER,
+            "exp": now + _dt.timedelta(hours=1),
+        },
+        JWT_SECRET,
+        algorithm="HS256",
+    )
+    settings = get_settings()
+    with pytest.raises(ProblemException) as exc_info:
+        _resolve_jwt_principal(token, settings)
+    assert exc_info.value.status_code == 401
+
+
+def test_jwt_tenant_id_whitespace_only_returns_401() -> None:
+    """A JWT with a whitespace-only tenant_id is rejected as empty."""
+    import datetime as _dt
+
+    from backend.app.errors import ProblemException
+    from backend.app.security.auth import _resolve_jwt_principal
+
+    now = _dt.datetime.now(_dt.timezone.utc)
+    token = jwt.encode(
+        {
+            "sub": "u",
+            "tenant_id": "   ",
+            "aud": JWT_AUDIENCE,
+            "iss": JWT_ISSUER,
+            "exp": now + _dt.timedelta(hours=1),
+        },
+        JWT_SECRET,
+        algorithm="HS256",
+    )
+    settings = get_settings()
+    with pytest.raises(ProblemException) as exc_info:
+        _resolve_jwt_principal(token, settings)
+    assert exc_info.value.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# ApiKeyStore thread-safety and exhaustive-loop tests (fix #116 / #125)
+# ---------------------------------------------------------------------------
+
+
+def test_get_api_key_store_singleton_under_concurrency() -> None:
+    """Concurrent callers all receive the same ApiKeyStore singleton."""
+    import threading
+
+    results: list[object] = []
+
+    def _get() -> None:
+        results.append(get_api_key_store())
+
+    threads = [threading.Thread(target=_get) for _ in range(20)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert len(results) == 20
+    first = results[0]
+    assert all(r is first for r in results)
+
+
+def test_resolve_finds_correct_key_among_many() -> None:
+    """ApiKeyStore.resolve returns the right record when many keys are registered."""
+    from backend.app.security.auth import ApiKeyStore
+
+    store = ApiKeyStore(API_KEY_SALT)
+    for i in range(15):
+        store.register(f"decoy-{i}", f"tenant_{i}", f"key_{i}")
+    store.register("target-key", "target-tenant", "key_target")
+    for i in range(15, 30):
+        store.register(f"decoy-{i}", f"tenant_{i}", f"key_{i}")
+
+    record = store.resolve("target-key")
+
+    assert record is not None
+    assert record.tenant_id == "target-tenant"
+    assert record.active is True
+
+
+def test_resolve_returns_none_for_rotated_key() -> None:
+    """resolve() returns None for a deactivated (rotated) key."""
+    from backend.app.security.auth import ApiKeyStore
+
+    store = ApiKeyStore(API_KEY_SALT)
+    store.register("old-key", TENANT_A, "key_1")
+    store.rotate("old-key", "new-key")
+
+    assert store.resolve("old-key") is None
+    assert store.resolve("new-key") is not None
