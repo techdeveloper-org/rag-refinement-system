@@ -142,7 +142,7 @@ async def _answer_stream(
         yield _sse_event("final", final.model_dump(exclude_none=True))
     except DependencyUnavailable as exc:
         problem = service_unavailable(
-            exc.args[0] if exc.args and exc.args[0] else "Generation dependency unavailable.",
+            str(exc) if exc.args else "An unexpected error occurred",
             query_id=query_id,
         )
         yield _sse_event("error", problem.to_problem())

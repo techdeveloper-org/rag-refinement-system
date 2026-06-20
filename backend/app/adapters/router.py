@@ -165,6 +165,14 @@ def _routed_sections_from_output(
     """
     relevant = output.get("relevant_sections") or []
     confidences = output.get("confidence") or []
+    if len(relevant) != len(confidences):
+        _logger.warning(
+            "router output length mismatch for doc %r: relevant_sections=%d confidence=%d;"
+            " sections beyond the shorter list will be dropped",
+            doc_id,
+            len(relevant),
+            len(confidences),
+        )
     routed: list[RoutedSection] = []
     for index, section_id in enumerate(relevant):
         record = toc_by_id.get(str(section_id))
