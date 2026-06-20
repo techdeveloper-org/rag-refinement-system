@@ -79,6 +79,8 @@ async def route(
                     from router.llm import ClaudeHaikuRouterLLM
 
                     _default_graph = RouterGraph(ClaudeHaikuRouterLLM())
+                    from router import graph as _graph_mod
+                    _graph_mod.ROUTER_BACKEND = _default_graph.backend
         graph = _default_graph
     else:
         graph = RouterGraph(llm)

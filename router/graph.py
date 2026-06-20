@@ -363,11 +363,9 @@ class RouterGraph:
         Args:
             llm: The injected routing LLM (deterministic fake in tests).
         """
-        global ROUTER_BACKEND
         self._llm = llm
         self._app = _build_langgraph(llm)
         self.backend = "langgraph" if self._app is not None else "async-pipeline"
-        ROUTER_BACKEND = self.backend
 
     async def run(
         self,

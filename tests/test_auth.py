@@ -278,9 +278,13 @@ def test_get_api_key_store_singleton_under_concurrency() -> None:
     import threading
 
     results: list[object] = []
+    errors: list[BaseException] = []
 
     def _get() -> None:
-        results.append(get_api_key_store())
+        try:
+            results.append(get_api_key_store())
+        except BaseException as exc:
+            errors.append(exc)
 
     threads = [threading.Thread(target=_get) for _ in range(20)]
     for t in threads:
@@ -288,6 +292,7 @@ def test_get_api_key_store_singleton_under_concurrency() -> None:
     for t in threads:
         t.join()
 
+    assert not errors, f"Thread raised: {errors[0]}"
     assert len(results) == 20
     first = results[0]
     assert all(r is first for r in results)
