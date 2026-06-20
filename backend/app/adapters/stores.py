@@ -19,8 +19,10 @@ from typing import Any
 
 from db.models import Document, Section
 from sqlalchemy import create_engine, delete, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
+from backend.app.api.interfaces import DependencyUnavailable
 from ingestion.pipeline import SectionRow
 
 
@@ -67,9 +69,13 @@ class SqlAlchemySectionStore:
         stmt = select(Document.doc_id).where(
             Document.tenant_id == tenant_id,
             Document.content_hash == content_hash_value,
+            Document.tombstoned_at.is_(None),
         )
-        with self._session_factory() as session:
-            return session.execute(stmt).scalar_one_or_none()
+        try:
+            with self._session_factory() as session:
+                return session.execute(stmt).scalar_one_or_none()
+        except SQLAlchemyError as exc:
+            raise DependencyUnavailable("structure store unreachable") from exc
 
     def upsert_document(
         self,
@@ -94,44 +100,60 @@ class SqlAlchemySectionStore:
             ingest_status: One of ``db.models.INGEST_STATUS_VALUES``.
             fallback_only: True when no structure was detected (Scenario C).
         """
-        with self._session_factory() as session, session.begin():
-            row = session.get(Document, doc_id)
-            if row is None:
-                row = Document(doc_id=doc_id, tenant_id=tenant_id)
-                session.add(row)
-            row.tenant_id = tenant_id
-            row.title = title
-            row.domain = domain
-            row.total_pages = total_pages
-            row.content_hash = content_hash_value
-            row.ingest_status = ingest_status
-            row.fallback_only = fallback_only
+        try:
+            with self._session_factory() as session, session.begin():
+                row = session.get(Document, doc_id)
+                if row is None:
+                    row = Document(doc_id=doc_id, tenant_id=tenant_id)
+                    session.add(row)
+                row.tenant_id = tenant_id
+                row.title = title
+                row.domain = domain
+                row.total_pages = total_pages
+                row.content_hash = content_hash_value
+                row.ingest_status = ingest_status
+                row.fallback_only = fallback_only
+                row.tombstoned_at = None
+        except SQLAlchemyError as exc:
+            raise DependencyUnavailable("structure store unreachable") from exc
 
-    def replace_sections(self, doc_id: str, rows: list[SectionRow]) -> int:
+    def replace_sections(self, tenant_id: str, doc_id: str, rows: list[SectionRow]) -> int:
         """Replace all sections for ``doc_id`` with ``rows`` (idempotent).
 
         Args:
+            tenant_id: Owning tenant (cross-tenant delete guard).
             doc_id: Document whose sections are replaced.
             rows: New section rows.
 
         Returns:
             The number of section rows written.
+
+        Raises:
+            DependencyUnavailable: When the structure store is unreachable.
         """
-        with self._session_factory() as session, session.begin():
-            session.execute(delete(Section).where(Section.doc_id == doc_id))
-            for row in rows:
-                session.add(
-                    Section(
-                        section_id=row.section_id,
-                        doc_id=row.doc_id,
-                        tenant_id=row.tenant_id,
-                        title=row.title,
-                        level=row.level,
-                        page_start=row.page_start,
-                        page_end=row.page_end,
+        try:
+            with self._session_factory() as session, session.begin():
+                session.execute(
+                    delete(Section).where(
+                        Section.doc_id == doc_id,
+                        Section.tenant_id == tenant_id,
                     )
                 )
-            return len(rows)
+                for row in rows:
+                    session.add(
+                        Section(
+                            section_id=row.section_id,
+                            doc_id=row.doc_id,
+                            tenant_id=row.tenant_id,
+                            title=row.title,
+                            level=row.level,
+                            page_start=row.page_start,
+                            page_end=row.page_end,
+                        )
+                    )
+                return len(rows)
+        except SQLAlchemyError as exc:
+            raise DependencyUnavailable("structure store unreachable") from exc
 
 
 class QdrantVectorStore:

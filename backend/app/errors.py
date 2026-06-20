@@ -15,9 +15,12 @@ document so no endpoint leaks internal detail (NFR-008, common-standards Rule
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from fastapi import FastAPI, Request, status
+
+_logger = logging.getLogger(__name__)
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -365,6 +368,9 @@ async def _handle_http_exception(
 async def _handle_unexpected(_request: Request, _exc: Exception) -> JSONResponse:
     """Catch-all handler that masks unexpected errors as a 500 problem.
 
+    Logs the full traceback server-side so the incident can be investigated
+    without leaking any internal detail to the caller (NFR-008).
+
     Args:
         _request: The incoming request (unused).
         _exc: The unexpected exception (never echoed to the client).
@@ -372,6 +378,9 @@ async def _handle_unexpected(_request: Request, _exc: Exception) -> JSONResponse
     Returns:
         A generic 500 INTERNAL_ERROR problem response.
     """
+    _logger.exception(
+        "Unhandled exception on %s %s", _request.method, _request.url.path
+    )
     return _problem_response(internal_error())
 
 

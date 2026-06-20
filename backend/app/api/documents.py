@@ -79,7 +79,7 @@ def _now_iso() -> str:
     Returns:
         The timezone-aware current UTC timestamp.
     """
-    return _dt.datetime.now(_dt.UTC).isoformat()
+    return _dt.datetime.now(_dt.timezone.utc).isoformat()
 
 
 async def _read_capped(file: UploadFile, max_bytes: int) -> bytes:
@@ -259,9 +259,14 @@ async def list_documents(
     Returns:
         A :class:`DocumentListResponse` page plus pagination metadata.
     """
-    records, total_count = await store.list_documents(
-        principal.tenant_id, page, page_size, domain
-    )
+    try:
+        records, total_count = await store.list_documents(
+            principal.tenant_id, page, page_size, domain
+        )
+    except DependencyUnavailable as exc:
+        raise service_unavailable(
+            str(exc) or "Document store unavailable."
+        ) from exc
     total_pages = math.ceil(total_count / page_size) if page_size else 0
     if total_count > 0 and page > total_pages:
         raise validation_error(
@@ -304,7 +309,12 @@ async def get_document(
         ProblemException: 404 when the document is absent for the tenant
             (cross-tenant access resolves to not-found, not a leak).
     """
-    record = await store.get_document(principal.tenant_id, doc_id)
+    try:
+        record = await store.get_document(principal.tenant_id, doc_id)
+    except DependencyUnavailable as exc:
+        raise service_unavailable(
+            str(exc) or "Document store unavailable."
+        ) from exc
     if record is None:
         raise document_not_found()
     return _to_document_schema(record)
@@ -335,10 +345,20 @@ async def get_document_toc(
     Raises:
         ProblemException: 404 when the document is absent for the tenant.
     """
-    record = await store.get_document(principal.tenant_id, doc_id)
+    try:
+        record = await store.get_document(principal.tenant_id, doc_id)
+    except DependencyUnavailable as exc:
+        raise service_unavailable(
+            str(exc) or "Document store unavailable."
+        ) from exc
     if record is None:
         raise document_not_found()
-    sections = await store.get_sections(principal.tenant_id, doc_id)
+    try:
+        sections = await store.get_sections(principal.tenant_id, doc_id)
+    except DependencyUnavailable as exc:
+        raise service_unavailable(
+            str(exc) or "Document store unavailable."
+        ) from exc
     return TocResponse(
         document_id=doc_id,
         fallback_only=record.fallback_only,
@@ -419,10 +439,20 @@ async def export_document_data(
     Raises:
         ProblemException: 404 when the document is absent for the tenant.
     """
-    record = await store.get_document(principal.tenant_id, doc_id)
+    try:
+        record = await store.get_document(principal.tenant_id, doc_id)
+    except DependencyUnavailable as exc:
+        raise service_unavailable(
+            str(exc) or "Document store unavailable."
+        ) from exc
     if record is None:
         raise document_not_found()
-    sections = await store.get_sections(principal.tenant_id, doc_id)
+    try:
+        sections = await store.get_sections(principal.tenant_id, doc_id)
+    except DependencyUnavailable as exc:
+        raise service_unavailable(
+            str(exc) or "Document store unavailable."
+        ) from exc
     return DataAccessExport(
         doc_id=doc_id,
         generated_at=_now_iso(),

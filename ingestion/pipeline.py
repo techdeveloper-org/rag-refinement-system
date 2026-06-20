@@ -379,9 +379,14 @@ def ingest_document(
     """
     if not doc.tenant_id:
         raise ValueError("tenant_id is mandatory (IDOR isolation key).")
+    if not doc.data:
+        raise ValueError("Document content is empty; cannot ingest zero-byte file.")
 
     hash_value = content_hash(doc.data)
-    existing = section_store.find_doc_id_by_hash(doc.tenant_id, hash_value)
+    if not doc.no_retention:
+        existing = section_store.find_doc_id_by_hash(doc.tenant_id, hash_value)
+    else:
+        existing = None
     doc_id = existing or _deterministic_doc_id(doc.tenant_id, hash_value)
 
     parsed = parser.parse(doc.data)

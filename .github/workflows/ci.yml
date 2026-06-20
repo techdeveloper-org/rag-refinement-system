@@ -62,7 +62,7 @@ jobs:
       - name: Install security tooling
         run: pip install ".[dev]"
       - name: Bandit SAST (blocking)
-        run: bandit -r backend ingestion router db -ll
+        run: bandit -r backend ingestion router db
       - name: pip-audit SCA (blocking)
         run: pip-audit
       - name: detect-secrets scan (blocking)

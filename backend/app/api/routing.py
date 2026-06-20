@@ -10,9 +10,13 @@ sections with a display-only token-reduction estimate.
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends
 
 from backend.app.api.dependencies import get_document_store, get_router
+
+_logger = logging.getLogger(__name__)
 from backend.app.api.helpers import estimate_token_reduction, new_query_id
 from backend.app.api.interfaces import (
     DependencyUnavailable,
@@ -75,9 +79,20 @@ async def route_query(
     """
     document_ids = _target_document_ids(body)
 
+    if body.rerank:
+        _logger.warning(
+            "rerank=True requested but re-ranking is not yet supported; "
+            "returning non-reranked results."
+        )
+
     total_pages = 0
     for doc_id in document_ids:
-        document = await store.get_document(principal.tenant_id, doc_id)
+        try:
+            document = await store.get_document(principal.tenant_id, doc_id)
+        except DependencyUnavailable as exc:
+            raise service_unavailable(
+                str(exc) or "Document store unavailable."
+            ) from exc
         if document is None:
             raise document_not_found()
         total_pages += document.total_pages

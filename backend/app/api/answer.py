@@ -137,30 +137,14 @@ async def _answer_stream(
         )
         yield _sse_event("final", final.model_dump(exclude_none=True))
     except DependencyUnavailable as exc:
-        problem = service_unavailable(str(exc) or "Generation dependency unavailable.")
-        problem.query_id = query_id
-        yield _sse_event(
-            "final",
-            AnswerFinalEvent(
-                query_id=query_id,
-                answer="".join(answer_parts),
-                citations=_build_citations(decision),
-                routing=_build_routing_summary(decision),
-            ).model_dump(exclude_none=True),
+        problem = service_unavailable(
+            exc.args[0] if exc.args and exc.args[0] else "Generation dependency unavailable."
         )
+        problem.query_id = query_id
         yield _sse_event("error", problem.to_problem())
     except Exception:  # noqa: BLE001 - mid-stream failures become an SSE error event
         problem = internal_error()
         problem.query_id = query_id
-        yield _sse_event(
-            "final",
-            AnswerFinalEvent(
-                query_id=query_id,
-                answer="".join(answer_parts),
-                citations=_build_citations(decision),
-                routing=_build_routing_summary(decision),
-            ).model_dump(exclude_none=True),
-        )
         yield _sse_event("error", problem.to_problem())
 
 
@@ -196,7 +180,12 @@ async def answer_query(
         ProblemException: 404 when the document is not owned by the caller;
             503 when routing is unreachable (pre-stream).
     """
-    document = await store.get_document(principal.tenant_id, body.document_id)
+    try:
+        document = await store.get_document(principal.tenant_id, body.document_id)
+    except DependencyUnavailable as exc:
+        raise service_unavailable(
+            exc.args[0] if exc.args and exc.args[0] else "Document store unavailable."
+        ) from exc
     if document is None:
         raise document_not_found()
 

@@ -13,6 +13,7 @@ The routing LLM is injectable so tests run deterministically and offline.
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -21,6 +22,9 @@ from router.llm import RouterLLM
 from router.schema import RouterOutput
 
 __all__ = ["route", "RouterOutput", "RouterLLM", "RouterGraph"]
+
+_default_graph: RouterGraph | None = None
+_default_graph_lock = threading.Lock()
 
 
 async def route(
@@ -43,6 +47,11 @@ async def route(
     (``fallback=True``). The router never invokes the generation LLM and never
     returns a section id that is not present in ``toc``.
 
+    When ``llm`` is omitted the default ``RouterGraph`` (backed by a singleton
+    ``ClaudeHaikuRouterLLM``) is reused across calls via double-checked locking so
+    neither the graph nor the underlying Anthropic client is reconstructed per
+    request.
+
     Args:
         query: The user's natural-language query (untrusted input).
         doc_id: The document identifier (used as the TOC cache key).
@@ -51,8 +60,8 @@ async def route(
             and ``summary`` are optional).
         tenant_id: Tenant scope for isolation and tracing (keyword-only).
         llm: The routing LLM implementation. Required in practice; when omitted a
-            ``ClaudeHaikuRouterLLM`` is constructed (which resolves credentials
-            from the environment). Tests pass a deterministic fake.
+            ``ClaudeHaikuRouterLLM`` is constructed once and reused (credentials
+            resolved from the environment). Tests pass a deterministic fake.
         confidence_threshold: Sections scoring below this are treated as
             low-confidence (default 0.7).
         max_sections: Maximum number of sections to return (default 3).
@@ -62,11 +71,17 @@ async def route(
         ``page_ranges``, ``confidence``, ``fallback``, ``routing_time_ms``, and
         ``rationale``.
     """
+    global _default_graph
     if llm is None:
-        from router.llm import ClaudeHaikuRouterLLM
+        if _default_graph is None:
+            with _default_graph_lock:
+                if _default_graph is None:
+                    from router.llm import ClaudeHaikuRouterLLM
 
-        llm = ClaudeHaikuRouterLLM()
-    graph = RouterGraph(llm)
+                    _default_graph = RouterGraph(ClaudeHaikuRouterLLM())
+        graph = _default_graph
+    else:
+        graph = RouterGraph(llm)
     output = await graph.run(
         query=query,
         doc_id=doc_id,

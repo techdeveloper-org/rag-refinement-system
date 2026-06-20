@@ -46,37 +46,36 @@ class ReadinessStatus(BaseModel):
 
 
 async def _check_postgres(database_url: str, timeout_seconds: float) -> bool:
-    """Check PostgreSQL reachability by opening a TCP connection.
+    """Check PostgreSQL reachability by performing a real authenticated query.
 
-    Parses the host and port from the DSN and attempts a short-lived socket
-    connection. A successful connect is sufficient for a readiness signal;
-    full auth/query checks are intentionally out of scope for a probe.
+    Opens a genuine asyncpg connection and executes ``SELECT 1`` so that a
+    healthy result requires valid credentials, not just an open TCP port.
+    The connection is closed immediately after the probe query succeeds.
 
     Args:
         database_url: PostgreSQL DSN (``postgresql://host:port/db``).
         timeout_seconds: Connection timeout budget in seconds.
 
     Returns:
-        True if the host accepted a TCP connection, otherwise False.
+        True if the authenticated query succeeded, otherwise False.
     """
     import asyncio
-    from urllib.parse import urlparse
 
-    parsed = urlparse(database_url)
-    host = parsed.hostname
-    port = parsed.port or 5432
-    if not host:
-        return False
+    import asyncpg
+
     try:
-        connection = asyncio.open_connection(host=host, port=port)
-        _reader, writer = await asyncio.wait_for(connection, timeout=timeout_seconds)
-        writer.close()
+        conn = await asyncio.wait_for(
+            asyncpg.connect(database_url, timeout=timeout_seconds),
+            timeout=timeout_seconds,
+        )
         try:
-            await writer.wait_closed()
-        except (ConnectionError, OSError):
-            pass
+            await conn.execute("SELECT 1")
+        finally:
+            await conn.close()
         return True
-    except (TimeoutError, OSError):
+    except asyncio.CancelledError:
+        raise
+    except Exception:
         return False
 
 

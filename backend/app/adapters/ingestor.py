@@ -64,17 +64,21 @@ def _toc_to_records(
     Returns:
         One :class:`SectionRecord` per TOC entry, with canonical section ids.
     """
-    return [
-        SectionRecord(
-            section_id=section_id_for(doc_id, ordinal),
-            tenant_id=tenant_id,
-            title=entry.get("title"),
-            level=int(entry.get("level", 1)),
-            page_start=int(entry.get("page_start", 1)),
-            page_end=int(entry.get("page_end", 1)),
+    records = []
+    for ordinal, entry in enumerate(toc):
+        level_raw = entry.get("level", 1)
+        level = int(level_raw) if level_raw is not None else 1
+        records.append(
+            SectionRecord(
+                section_id=section_id_for(doc_id, ordinal),
+                tenant_id=tenant_id,
+                title=entry.get("title"),
+                level=level,
+                page_start=int(entry.get("page_start", 1)),
+                page_end=int(entry.get("page_end", 1)),
+            )
         )
-        for ordinal, entry in enumerate(toc)
-    ]
+    return records
 
 
 
@@ -204,15 +208,18 @@ class PipelineIngestor:
                 title="Embedder misconfiguration",
                 detail=str(exc),
             ) from exc
+        except (AssertionError, ValueError, TypeError) as programming_error:
+            raise
         except Exception as exc:
             raise DependencyUnavailable(f"Ingestion pipeline failed: {exc}") from exc
 
         toc = list(result.get("toc") or [])
         doc_id = str(result["doc_id"])
         fallback_only = bool(result.get("fallback_only", False))
+        extracted_title = result.get("title") or title
         return IngestOutcome(
             doc_id=doc_id,
-            title=title,
+            title=extracted_title,
             total_pages=int(result.get("total_pages") or 0),
             toc=_toc_to_records(doc_id, tenant_id, toc),
             ingest_status=_ingest_status(

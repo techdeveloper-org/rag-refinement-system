@@ -198,9 +198,10 @@ def _derive_page_ranges(
             page_end = survivors[index + 1][2] - 1
         else:
             page_end = bounded_total
+        level_val = level if level else 1
         entries.append(
             TocEntry(
-                level=max(1, int(title and level) or level),
+                level=max(1, int(level_val)),
                 title=str(title).strip(),
                 page_start=start,
                 page_end=page_end,
@@ -262,8 +263,12 @@ def _detect_headers(doc: ParsedDocument) -> tuple[TocEntry, ...]:
     raw: list[tuple[int, str, int]] = []
     for page in doc.pages:
         for block in page.blocks:
+            if body_median == 0.0:
+                break
             is_large = body_median > 0 and block.font_size >= threshold
-            is_short_bold = block.is_bold and len(block.text) <= 80
+            is_short_bold = (
+                block.is_bold and body_median > 0 and len(block.text) <= 80
+            )
             if is_large or is_short_bold:
                 level = 1 if (body_median > 0 and block.font_size >= body_median * 1.4) else 2
                 raw.append((level, block.text, page.number))

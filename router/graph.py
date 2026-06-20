@@ -28,6 +28,8 @@ selected backend is recorded in ``ROUTER_BACKEND``.
 from __future__ import annotations
 
 import json
+import logging
+import threading
 import time
 from collections import OrderedDict
 from collections.abc import Mapping, Sequence
@@ -42,6 +44,7 @@ LOW_CONFIDENCE_FLOOR = 0.5
 
 _TOC_JSON_CACHE: OrderedDict[str, str] = OrderedDict()
 _TOC_CACHE_MAXSIZE = 256
+_TOC_JSON_CACHE_LOCK = threading.Lock()
 
 
 class RouterState(TypedDict, total=False):
@@ -87,6 +90,10 @@ def _cached_toc_json(doc_id: str, toc: Sequence[Mapping[str, Any]]) -> str:
     queries against the same document. It does not affect the one-call-per-query
     invariant (the LLM is always called exactly once per ``route``).
 
+    The cache lookup and insertion are each wrapped in ``_TOC_JSON_CACHE_LOCK``
+    while the expensive serialization step runs outside the lock so that concurrent
+    calls on different documents do not block each other unnecessarily.
+
     Args:
         doc_id: Document identifier used as the cache key.
         toc: Authoritative TOC entries.
@@ -94,22 +101,39 @@ def _cached_toc_json(doc_id: str, toc: Sequence[Mapping[str, Any]]) -> str:
     Returns:
         A deterministic JSON string of the projected TOC.
     """
-    cached = _TOC_JSON_CACHE.get(doc_id)
-    if cached is not None:
-        _TOC_JSON_CACHE.move_to_end(doc_id)
-        return cached
+    with _TOC_JSON_CACHE_LOCK:
+        cached = _TOC_JSON_CACHE.get(doc_id)
+        if cached is not None:
+            _TOC_JSON_CACHE.move_to_end(doc_id)
+            return cached
     projected = _coerce_toc_for_prompt(toc)
     serialized = json.dumps(projected, ensure_ascii=True, sort_keys=True)
-    _TOC_JSON_CACHE[doc_id] = serialized
-    _TOC_JSON_CACHE.move_to_end(doc_id)
-    if len(_TOC_JSON_CACHE) > _TOC_CACHE_MAXSIZE:
-        _TOC_JSON_CACHE.popitem(last=False)
+    with _TOC_JSON_CACHE_LOCK:
+        _TOC_JSON_CACHE[doc_id] = serialized
+        _TOC_JSON_CACHE.move_to_end(doc_id)
+        if len(_TOC_JSON_CACHE) > _TOC_CACHE_MAXSIZE:
+            _TOC_JSON_CACHE.popitem(last=False)
     return serialized
 
 
 def clear_toc_cache() -> None:
     """Clear the per-document TOC projection cache (test/maintenance hook)."""
-    _TOC_JSON_CACHE.clear()
+    with _TOC_JSON_CACHE_LOCK:
+        _TOC_JSON_CACHE.clear()
+
+
+def invalidate_toc_cache(doc_id: str) -> None:
+    """Remove a single document's projected-TOC entry from the cache.
+
+    Call this from the ingestion pipeline after a document is re-uploaded so
+    the next routing call against that document rebuilds its TOC projection
+    from the freshly ingested data rather than serving a stale cached entry.
+
+    Args:
+        doc_id: The document identifier whose cache entry should be evicted.
+    """
+    with _TOC_JSON_CACHE_LOCK:
+        _TOC_JSON_CACHE.pop(doc_id, None)
 
 
 def _node_extract_query(state: RouterState) -> RouterState:
@@ -377,8 +401,20 @@ class RouterGraph:
             final: RouterState = await self._app.ainvoke(initial)  # type: ignore[attr-defined]
             output = final.get("output")
             if output is None:
-                final = await _run_pipeline_fallback(initial, self._llm)
-                output = final["output"]
+                logging.getLogger(__name__).error(
+                    "LangGraph ainvoke returned None output; "
+                    "using deterministic fallback (no LLM call)"
+                )
+                state_copy: RouterState = dict(initial)  # type: ignore[assignment]
+                state_copy = _node_extract_query(state_copy)
+                state_copy["ranked"] = []
+                state_copy["rationale"] = (
+                    "Router graph returned no output; using full-document fallback."
+                )
+                state_copy["fallback"] = True
+                state_copy["selected"] = []
+                state_copy = _node_build_output(state_copy)
+                output = state_copy["output"]
         else:
             final = await _run_pipeline_fallback(initial, self._llm)
             output = final["output"]

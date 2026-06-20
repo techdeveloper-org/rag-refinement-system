@@ -54,8 +54,8 @@ class Settings(BaseSettings):
 
     jwt_secret: str | None = Field(default=None, alias="JWT_SECRET")
     jwt_algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
-    jwt_audience: str = Field(default="rag-refinement-personal", alias="JWT_AUDIENCE")
-    jwt_issuer: str = Field(alias="JWT_ISSUER")
+    jwt_audience: str | None = Field(default=None, alias="JWT_AUDIENCE")
+    jwt_issuer: str | None = Field(default=None, alias="JWT_ISSUER")
 
     api_key_salt: str | None = Field(default=None, alias="API_KEY_SALT")
 

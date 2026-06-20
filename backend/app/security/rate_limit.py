@@ -73,17 +73,23 @@ class RateLimiter:
 
 
 _rate_limiter: RateLimiter | None = None
+_rate_limiter_lock = threading.Lock()
 
 
 def get_rate_limiter() -> RateLimiter:
     """Return the process-wide rate limiter, creating it on first use.
+
+    Uses double-checked locking to ensure thread-safe singleton
+    initialization without acquiring the lock on every call.
 
     Returns:
         The shared :class:`RateLimiter` instance.
     """
     global _rate_limiter
     if _rate_limiter is None:
-        _rate_limiter = RateLimiter()
+        with _rate_limiter_lock:
+            if _rate_limiter is None:
+                _rate_limiter = RateLimiter()
     return _rate_limiter
 
 

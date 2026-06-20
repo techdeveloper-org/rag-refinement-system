@@ -282,6 +282,9 @@ class RouterModuleAdapter:
         )
         errors = [r for r in raw if isinstance(r, BaseException)]
         if errors:
+            for exc in errors:
+                if isinstance(exc, asyncio.CancelledError):
+                    raise exc
             raise errors[0]
         results = raw
         all_sections: list[RoutedSection] = []

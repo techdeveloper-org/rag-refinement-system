@@ -242,6 +242,7 @@ def make_jwt(tenant_id: str, subject: str = "user-1", *, expired: bool = False) 
         "sub": subject,
         "tenant_id": tenant_id,
         "aud": JWT_AUDIENCE,
+        "iss": JWT_ISSUER,
         "exp": exp,
         "iat": now,
     }
@@ -254,6 +255,7 @@ def _configure_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     get_settings.cache_clear()
     monkeypatch.setenv("JWT_SECRET", JWT_SECRET)
     monkeypatch.setenv("JWT_AUDIENCE", JWT_AUDIENCE)
+    monkeypatch.setenv("JWT_ISSUER", JWT_ISSUER)
     monkeypatch.setenv("API_KEY_SALT", API_KEY_SALT)
     auth_module._api_key_store = None
     get_rate_limiter().reset()

@@ -107,12 +107,27 @@ class OpenAIEmbedder:
     """
 
     def __init__(self, model: str = OPENAI_MODEL) -> None:
-        """Initialize the adapter.
+        """Initialize the adapter and create the reusable OpenAI client.
+
+        The client is created once and reused across ``embed()`` calls to avoid
+        constructing a new HTTP client on every invocation (#85).
 
         Args:
             model: OpenAI embedding model id (defaults to text-embedding-3-small).
+
+        Raises:
+            RuntimeError: When ``OPENAI_API_KEY`` is unset or ``openai`` is not
+                importable.
         """
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            raise RuntimeError("OPENAI_API_KEY is not set (env-only, no hardcoded key).")
+        try:
+            from openai import OpenAI
+        except ImportError as exc:
+            raise RuntimeError("openai package is required for OpenAIEmbedder.") from exc
         self._model = model
+        self._client = OpenAI(api_key=api_key)
 
     @property
     def dimension(self) -> int:
@@ -127,20 +142,8 @@ class OpenAIEmbedder:
 
         Returns:
             One 1536-dim vector per input text.
-
-        Raises:
-            RuntimeError: When ``OPENAI_API_KEY`` is unset or ``openai`` is not
-                importable.
         """
-        api_key = os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            raise RuntimeError("OPENAI_API_KEY is not set (env-only, no hardcoded key).")
-        try:
-            from openai import OpenAI
-        except ImportError as exc:
-            raise RuntimeError("openai package is required for OpenAIEmbedder.") from exc
-        client = OpenAI(api_key=api_key)
-        response = client.embeddings.create(model=self._model, input=texts)
+        response = self._client.embeddings.create(model=self._model, input=texts)
         return [list(item.embedding) for item in response.data]
 
 
@@ -152,26 +155,13 @@ class BgeM3Embedder:
     """
 
     def __init__(self, model: str = BGE_M3_MODEL) -> None:
-        """Initialize the adapter.
+        """Initialize the adapter and load the BGE-M3 model once (#86).
+
+        The model is loaded at construction time and reused across ``embed()``
+        calls to avoid reloading the heavyweight model on every invocation.
 
         Args:
             model: BGE-M3 model id.
-        """
-        self._model = model
-
-    @property
-    def dimension(self) -> int:
-        """Return the fixed output dimension (aligned to the collection)."""
-        return EMBEDDING_DIM
-
-    def embed(self, texts: list[str]) -> list[list[float]]:
-        """Embed texts via the local BGE-M3 model.
-
-        Args:
-            texts: Chunk texts to embed.
-
-        Returns:
-            One vector per input text.
 
         Raises:
             RuntimeError: When ``FlagEmbedding`` is not importable.
@@ -182,8 +172,24 @@ class BgeM3Embedder:
             raise RuntimeError(
                 "FlagEmbedding package is required for BgeM3Embedder."
             ) from exc
-        model = BGEM3FlagModel(self._model, use_fp16=False)
-        result = model.encode(texts, return_dense=True)
+        self._model_id = model
+        self._flag_model = BGEM3FlagModel(model, use_fp16=False)
+
+    @property
+    def dimension(self) -> int:
+        """Return the fixed output dimension (aligned to the collection)."""
+        return EMBEDDING_DIM
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        """Embed texts via the cached local BGE-M3 model.
+
+        Args:
+            texts: Chunk texts to embed.
+
+        Returns:
+            One vector per input text.
+        """
+        result = self._flag_model.encode(texts, return_dense=True)
         return [list(vector) for vector in result["dense_vecs"]]
 
 

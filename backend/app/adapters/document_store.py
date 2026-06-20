@@ -139,18 +139,26 @@ class SqlAlchemyDocumentStore:
     ) -> tuple[list[DocumentRecord], int]:
         """Return a page of the tenant's documents and the total count.
 
+        Both the COUNT and the page SELECT execute inside a single transaction so
+        the total and the returned page are always consistent with the same
+        snapshot. Raises ``ValueError`` when ``page_size`` is less than 1 to
+        prevent degenerate pagination reaching SQLAlchemy.
+
         Args:
             tenant_id: Owning tenant (IDOR guard).
             page: 1-based page number.
-            page_size: Items per page.
+            page_size: Items per page; must be >= 1.
             domain: Optional domain filter.
 
         Returns:
             A tuple of (page of records, total count) for live documents only.
 
         Raises:
+            ValueError: When ``page_size`` is less than 1.
             DependencyUnavailable: When the structure store is unreachable.
         """
+        if page_size < 1:
+            raise ValueError(f"page_size must be at least 1, got {page_size}")
         base = (
             Document.tenant_id == tenant_id,
             Document.tombstoned_at.is_(None),
@@ -166,8 +174,9 @@ class SqlAlchemyDocumentStore:
         )
         try:
             async with self._session_factory() as session:
-                total = (await session.execute(count_stmt)).scalar_one()
-                rows = (await session.execute(page_stmt)).scalars().all()
+                async with session.begin():
+                    total = (await session.execute(count_stmt)).scalar_one()
+                    rows = (await session.execute(page_stmt)).scalars().all()
         except SQLAlchemyError as exc:
             raise DependencyUnavailable("structure store unreachable") from exc
         return [_to_document_record(row) for row in rows], int(total)
@@ -175,25 +184,37 @@ class SqlAlchemyDocumentStore:
     async def get_sections(self, tenant_id: str, doc_id: str) -> list[SectionRecord]:
         """Return the tenant's sections (TOC) for a document, ordered by page.
 
+        Returns an empty list when the tenant does not own the document or the
+        document has been tombstoned; callers must not distinguish between the
+        two cases to avoid leaking tombstone state.
+
         Args:
             tenant_id: Owning tenant (IDOR guard).
             doc_id: Document identifier.
 
         Returns:
             The section records in page order, or an empty list when the tenant
-            does not own a live document with this id.
+            does not own a live (non-tombstoned) document with this id.
 
         Raises:
             DependencyUnavailable: When the structure store is unreachable.
         """
-        stmt = (
+        doc_stmt = select(Document.doc_id).where(
+            Document.doc_id == doc_id,
+            Document.tenant_id == tenant_id,
+            Document.tombstoned_at.is_(None),
+        )
+        section_stmt = (
             select(Section)
             .where(Section.doc_id == doc_id, Section.tenant_id == tenant_id)
             .order_by(Section.page_start, Section.section_id)
         )
         try:
             async with self._session_factory() as session:
-                rows = (await session.execute(stmt)).scalars().all()
+                live_doc_id = (await session.execute(doc_stmt)).scalar_one_or_none()
+                if live_doc_id is None:
+                    return []
+                rows = (await session.execute(section_stmt)).scalars().all()
         except SQLAlchemyError as exc:
             raise DependencyUnavailable("structure store unreachable") from exc
         return [_to_section_record(row) for row in rows]

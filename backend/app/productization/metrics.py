@@ -131,7 +131,7 @@ class ProductMetrics:
             latency_avg = self.routing_latency_ms.average
             routing_total = self.routing_total
             fallback_total = self.fallback_total
-        fallback_rate = self.fallback_rate
+            fallback_rate = fallback_total / routing_total if routing_total > 0 else 0.0
 
         lines = [
             "# HELP rag_token_reduction_ratio Avg token-reduction fraction vs full-doc RAG.",

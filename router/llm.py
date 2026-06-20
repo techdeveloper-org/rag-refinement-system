@@ -13,7 +13,7 @@ from __future__ import annotations
 import os
 from typing import Protocol, runtime_checkable
 
-DEFAULT_ROUTER_MODEL = os.environ.get("ROUTER_MODEL", "claude-3-haiku")
+DEFAULT_ROUTER_MODEL = os.environ.get("ROUTER_MODEL", "claude-3-haiku-20240307")
 DEFAULT_MAX_TOKENS = 1024
 
 
@@ -87,9 +87,16 @@ class ClaudeHaikuRouterLLM:
             try:
                 import anthropic
             except ImportError as exc:
-                raise RuntimeError(
-                    "anthropic package is required for ClaudeHaikuRouterLLM"
-                ) from exc
+                try:
+                    from backend.app.api.interfaces import DependencyUnavailable
+
+                    raise DependencyUnavailable(
+                        "anthropic package is required for ClaudeHaikuRouterLLM"
+                    ) from exc
+                except ImportError:
+                    raise ImportError(
+                        "anthropic package is required for ClaudeHaikuRouterLLM"
+                    ) from exc
             self._client = anthropic.AsyncAnthropic()
         return self._client
 

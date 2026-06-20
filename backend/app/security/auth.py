@@ -20,6 +20,7 @@ from __future__ import annotations
 import enum
 import hashlib
 import hmac
+import threading
 from dataclasses import dataclass
 
 import jwt
@@ -135,17 +136,20 @@ class ApiKeyStore:
             new_plaintext_key: The replacement key.
 
         Raises:
-            KeyError: If the old key is not registered.
+            ValueError: If the old key is not registered.
         """
         old_digest = hash_api_key(old_plaintext_key, self._salt)
         record = self._records.get(old_digest)
         if record is None:
-            raise KeyError("unknown api key")
+            raise ValueError("API key is not registered.")
         del self._records[old_digest]
         self.register(new_plaintext_key, record.tenant_id, record.subject)
 
     def resolve(self, plaintext_key: str) -> ApiKeyRecord | None:
         """Resolve an active key record from a presented plaintext key.
+
+        Iterates all records using :func:`hmac.compare_digest` to prevent
+        timing side-channel attacks that could enumerate registered digests.
 
         Args:
             plaintext_key: The raw key presented by the caller.
@@ -154,17 +158,22 @@ class ApiKeyStore:
             The matching active record, or None if unknown/rotated.
         """
         digest = hash_api_key(plaintext_key, self._salt)
-        record = self._records.get(digest)
-        if record is None or not record.active:
-            return None
-        return record
+        found: ApiKeyRecord | None = None
+        for record in self._records.values():
+            if hmac.compare_digest(digest, record.key_hash) and record.active:
+                found = record
+        return found
 
 
 _api_key_store: ApiKeyStore | None = None
+_api_key_store_lock = threading.Lock()
 
 
 def get_api_key_store() -> ApiKeyStore:
     """Return the process-wide API-key store, creating it on first use.
+
+    Uses double-checked locking to ensure thread-safe singleton
+    initialization without acquiring the lock on every call.
 
     Returns:
         The shared :class:`ApiKeyStore` salted with ``API_KEY_SALT``.
@@ -174,10 +183,12 @@ def get_api_key_store() -> ApiKeyStore:
     """
     global _api_key_store
     if _api_key_store is None:
-        settings = get_settings()
-        if not settings.api_key_salt:
-            raise unauthorized("API key authentication is not configured.")
-        _api_key_store = ApiKeyStore(settings.api_key_salt)
+        with _api_key_store_lock:
+            if _api_key_store is None:
+                settings = get_settings()
+                if not settings.api_key_salt:
+                    raise unauthorized("API key authentication is not configured.")
+                _api_key_store = ApiKeyStore(settings.api_key_salt)
     return _api_key_store
 
 
@@ -201,13 +212,17 @@ def _decode_jwt(token: str, settings: Settings) -> dict[str, object]:
         raise unauthorized("Bearer authentication is not configured.")
     try:
         options = {"require": ["exp", "sub"]}
+        decode_kwargs: dict[str, object] = {}
+        if settings.jwt_audience:
+            decode_kwargs["audience"] = settings.jwt_audience
+        if settings.jwt_issuer:
+            decode_kwargs["issuer"] = settings.jwt_issuer
         claims = jwt.decode(
             token,
             settings.jwt_secret,
             algorithms=[settings.jwt_algorithm],
-            audience=settings.jwt_audience,
-            issuer=settings.jwt_issuer,
             options=options,
+            **decode_kwargs,
         )
     except jwt.PyJWTError as exc:
         raise unauthorized("Bearer token is invalid or expired.") from exc
@@ -237,8 +252,10 @@ def _resolve_jwt_principal(token: str, settings: Settings) -> Principal:
         tenant_id = None
     if not subject or not tenant_id:
         raise unauthorized("Bearer token is missing required claims.")
+    if not isinstance(tenant_id, str) or not tenant_id.strip():
+        raise unauthorized("Bearer token tenant_id claim must be a non-empty string.")
     return Principal(
-        tenant_id=str(tenant_id), subject=subject, kind=PrincipalKind.JWT
+        tenant_id=tenant_id, subject=subject, kind=PrincipalKind.JWT
     )
 
 
