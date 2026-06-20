@@ -24,6 +24,8 @@ from backend.app.security.auth import Principal, require_principal
 from backend.app.settings import get_settings
 
 _WINDOW_SECONDS = 60
+_MAX_WINDOW_ENTRIES: int = 50_000
+"""Hard cap on tracked rate-limit windows to bound memory under credential-spray attacks."""
 
 
 class RateLimiter:
@@ -62,6 +64,11 @@ class RateLimiter:
                 window_start, count = now, 0
             count += 1
             self._windows[key] = (window_start, count)
+            if len(self._windows) > _MAX_WINDOW_ENTRIES:
+                # Evict oldest half to amortize eviction cost
+                sorted_keys = sorted(self._windows, key=lambda k: self._windows[k][0])
+                for k in sorted_keys[: len(sorted_keys) // 2]:
+                    del self._windows[k]
             expired = [k for k, (ws, _) in self._windows.items() if now - ws >= _WINDOW_SECONDS * 2]
             for k in expired:
                 del self._windows[k]

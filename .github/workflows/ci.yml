@@ -78,7 +78,7 @@ jobs:
           import sys
 
           def _key(path, secret):
-              return (path, secret["line_number"], secret["type"])
+              return (path, secret["line_number"], secret["type"], secret["hashed_secret"])
 
           with open(".secrets.baseline", encoding="utf-8") as f:
               baseline = json.load(f)

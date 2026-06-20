@@ -10,6 +10,7 @@ reflects which dependencies are configured.
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -58,7 +59,11 @@ class Settings(BaseSettings):
     )
 
     jwt_secret: str | None = Field(default=None, alias="JWT_SECRET")
-    jwt_algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
+    jwt_algorithm: Literal["HS256", "HS384", "HS512"] = Field(
+        default="HS256",
+        alias="JWT_ALGORITHM",
+        description="JWT signing algorithm — restricted to HMAC-SHA variants to prevent alg:none bypass.",
+    )
     jwt_audience: str | None = Field(default=None, alias="JWT_AUDIENCE")
     jwt_issuer: str | None = Field(default=None, alias="JWT_ISSUER")
 
