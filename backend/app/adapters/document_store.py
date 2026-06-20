@@ -53,7 +53,7 @@ def _to_document_record(row: Document) -> DocumentRecord:
         domain=row.domain,
         residency_region=row.residency_region,
         fallback_only=row.fallback_only,
-        created_at=row.created_at.isoformat() if row.created_at else "",
+        created_at=row.created_at.isoformat() if row.created_at is not None else None,
         pii_flags=dict(row.pii_flags or {}),
     )
 
