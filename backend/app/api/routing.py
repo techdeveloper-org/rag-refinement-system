@@ -78,7 +78,7 @@ async def route_query(
         ProblemException: 404 when a target document is not owned by the
             caller (IDOR guard); 503 when a dependency is unreachable.
     """
-    document_ids = _target_document_ids(body)
+    document_ids = list(dict.fromkeys(_target_document_ids(body)))
 
     if body.rerank:
         _logger.warning(

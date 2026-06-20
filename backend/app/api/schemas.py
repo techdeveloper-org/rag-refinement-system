@@ -51,6 +51,24 @@ class RouteRequest(_Strict):
     max_sections: Annotated[int, Field(ge=1, le=20)] = 3
     rerank: bool = False
 
+    @field_validator("document_ids")
+    @classmethod
+    def _document_ids_unique(cls, v: list[str]) -> list[str]:
+        """Reject duplicate entries in document_ids to prevent amplified vector-store queries.
+
+        Args:
+            v: The raw list of document ids.
+
+        Returns:
+            The validated list of document ids.
+
+        Raises:
+            ValueError: When any document id appears more than once.
+        """
+        if len(set(v)) != len(v):
+            raise ValueError("document_ids must be unique")
+        return v
+
     @field_validator("query")
     @classmethod
     def _query_not_blank(cls, v: str) -> str:
