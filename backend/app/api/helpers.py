@@ -59,7 +59,7 @@ def _pii_fields_from_flags(flags: dict[str, str], location: str) -> list[PiiFiel
         A list of :class:`PiiField` carrying field names only.
     """
     return [
-        PiiField(field=name, location=location, category=category or None)
+        PiiField(field=name, location=location, category=category if category is not None else None)
         for name, category in flags.items()
     ]
 

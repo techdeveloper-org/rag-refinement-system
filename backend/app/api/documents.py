@@ -13,7 +13,9 @@ from __future__ import annotations
 import datetime as _dt
 import math
 
-from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile, status
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, File, Form, Path, Query, Response, UploadFile, status
 
 from backend.app.api.dependencies import get_document_store, get_ingestor
 from backend.app.api.helpers import build_pii_inventory
@@ -50,6 +52,9 @@ router = APIRouter(prefix="/v1/documents", tags=["Documents"])
 _PDF_CONTENT_TYPE = "application/pdf"
 _RESIDENCY_REGIONS = {"IN", "EU", "US", "GLOBAL"}
 _UPLOAD_CHUNK_BYTES = 1 * 1024 * 1024
+_DOC_ID_PATTERN = r"^doc_[A-Za-z0-9]{6,}$"
+
+_DocumentIdPath = Annotated[str, Path(pattern=_DOC_ID_PATTERN)]
 
 
 def _is_pdf_content_type(content_type: str | None) -> bool:
@@ -268,7 +273,7 @@ async def list_documents(
             str(exc) or "Document store unavailable."
         ) from exc
     total_pages = math.ceil(total_count / page_size) if page_size else 0
-    if total_count > 0 and page > total_pages:
+    if page > max(1, total_pages):
         raise validation_error(
             detail="Requested page exceeds total pages.",
             errors=[{"field": "page", "message": f"must be <= {total_pages}"}],
@@ -291,7 +296,7 @@ async def list_documents(
     response_model_exclude_none=True,
 )
 async def get_document(
-    doc_id: str,
+    doc_id: _DocumentIdPath,
     principal: Principal = Depends(rate_limit()),
     store: DocumentStore = Depends(get_document_store),
 ) -> Document:
@@ -327,7 +332,7 @@ async def get_document(
     response_model_exclude_none=True,
 )
 async def get_document_toc(
-    doc_id: str,
+    doc_id: _DocumentIdPath,
     principal: Principal = Depends(rate_limit()),
     store: DocumentStore = Depends(get_document_store),
 ) -> TocResponse:
@@ -375,7 +380,7 @@ async def get_document_toc(
     response_model_exclude_none=True,
 )
 async def delete_document(
-    doc_id: str,
+    doc_id: _DocumentIdPath,
     principal: Principal = Depends(rate_limit(sensitive=True)),
     store: DocumentStore = Depends(get_document_store),
 ) -> ErasureReceipt:
@@ -418,7 +423,7 @@ async def delete_document(
     response_model_exclude_none=True,
 )
 async def export_document_data(
-    doc_id: str,
+    doc_id: _DocumentIdPath,
     principal: Principal = Depends(rate_limit(sensitive=True)),
     store: DocumentStore = Depends(get_document_store),
 ) -> DataAccessExport:

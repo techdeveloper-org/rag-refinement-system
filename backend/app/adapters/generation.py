@@ -25,11 +25,14 @@ from backend.app.api.interfaces import DependencyUnavailable, RoutedSection
 DEFAULT_GENERATION_MODEL = os.environ.get("GENERATION_MODEL", "claude-opus-4-8")
 """Answer-synthesis model id (overridable via the GENERATION_MODEL env var)."""
 
-DEFAULT_MAX_TOKENS = 4096
-"""Output token ceiling for a synthesized answer."""
+DEFAULT_MAX_TOKENS = 16000
+"""Output token ceiling for a synthesized answer (must exceed DEFAULT_THINKING_BUDGET_TOKENS)."""
 
 DEFAULT_THINKING_BUDGET_TOKENS = 5000
 """Default extended-thinking budget in tokens."""
+
+DEFAULT_STREAM_TIMEOUT = 300.0
+"""Total timeout in seconds for a streaming answer generation call."""
 
 _SYSTEM_PROMPT = (
     "You are a retrieval-augmented answer assistant. Answer the user's question "
@@ -105,7 +108,7 @@ class ClaudeGenerationLLM:
                 raise DependencyUnavailable(
                     "anthropic package is required for answer generation"
                 ) from exc
-            self._client = anthropic.AsyncAnthropic()
+            self._client = anthropic.AsyncAnthropic(max_retries=0)
         return self._client
 
     async def stream_answer(
@@ -137,6 +140,7 @@ class ClaudeGenerationLLM:
             thinking={"type": "enabled", "budget_tokens": self._thinking_budget_tokens},
             system=_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_message}],
+            timeout=DEFAULT_STREAM_TIMEOUT,
         ) as stream:
             async for text in stream.text_stream:
                 yield text

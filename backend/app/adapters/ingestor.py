@@ -74,8 +74,8 @@ def _toc_to_records(
                 tenant_id=tenant_id,
                 title=entry.get("title"),
                 level=level,
-                page_start=int(entry.get("page_start", 1)),
-                page_end=int(entry.get("page_end", 1)),
+                page_start=int(entry.get("page_start") or 1),
+                page_end=int(entry.get("page_end") or 1),
             )
         )
     return records
@@ -211,7 +211,7 @@ class PipelineIngestor:
         except (AssertionError, ValueError, TypeError) as programming_error:
             raise
         except Exception as exc:
-            raise DependencyUnavailable(f"Ingestion pipeline failed: {exc}") from exc
+            raise DependencyUnavailable("Ingestion pipeline failed; check service logs for details.") from exc
 
         toc = list(result.get("toc") or [])
         doc_id = str(result["doc_id"])

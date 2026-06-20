@@ -184,7 +184,11 @@ class ErasureOutbox(Base):
     __tablename__ = "erasure_outbox"
 
     outbox_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    doc_id: Mapped[str] = mapped_column(Text, nullable=False)
+    doc_id: Mapped[str] = mapped_column(
+        Text,
+        ForeignKey("documents.doc_id", ondelete="CASCADE"),
+        nullable=False,
+    )
     tenant_id: Mapped[str] = mapped_column(Text, nullable=False)
     store: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(

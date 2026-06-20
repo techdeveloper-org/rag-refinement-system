@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 _DOC_ID_PATTERN = r"^doc_[A-Za-z0-9]{6,}$"
 _SECTION_ID_PATTERN = r"^sec_[A-Za-z0-9]{1,}$"
@@ -50,6 +50,25 @@ class RouteRequest(_Strict):
     confidence_threshold: Confidence = 0.7
     max_sections: Annotated[int, Field(ge=1, le=20)] = 3
     rerank: bool = False
+
+    @field_validator("query")
+    @classmethod
+    def _query_not_blank(cls, v: str) -> str:
+        """Reject whitespace-only queries that pass min_length=1.
+
+        Args:
+            v: The raw query string.
+
+        Returns:
+            The stripped query string.
+
+        Raises:
+            ValueError: When the query is blank after stripping.
+        """
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("query must not be blank or whitespace-only")
+        return stripped
 
     @model_validator(mode="after")
     def _exactly_one_target(self) -> RouteRequest:
@@ -103,6 +122,25 @@ class AnswerRequest(_Strict):
     max_sections: Annotated[int, Field(ge=1, le=20)] = 3
     rerank: bool = False
     no_retention: bool = False
+
+    @field_validator("query")
+    @classmethod
+    def _query_not_blank(cls, v: str) -> str:
+        """Reject whitespace-only queries that pass min_length=1.
+
+        Args:
+            v: The raw query string.
+
+        Returns:
+            The stripped query string.
+
+        Raises:
+            ValueError: When the query is blank after stripping.
+        """
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("query must not be blank or whitespace-only")
+        return stripped
 
 
 class Citation(_Strict):

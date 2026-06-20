@@ -175,10 +175,19 @@ class BgeM3Embedder:
         self._model_id = model
         self._flag_model = BGEM3FlagModel(model, use_fp16=False)
 
+    BGE_M3_OUTPUT_DIM: int = 1024
+    """Actual dense-vector output dimension of the BGE-M3 model."""
+
     @property
     def dimension(self) -> int:
-        """Return the fixed output dimension (aligned to the collection)."""
-        return EMBEDDING_DIM
+        """Return the actual BGE-M3 dense output dimension (1024).
+
+        BGE-M3 produces 1024-dim dense vectors, which differs from the Qdrant
+        collection size (``EMBEDDING_DIM`` = 1536). The pipeline's
+        ``_validate_embed_dimension`` guard will surface this mismatch via
+        ``EmbedderDimensionError`` so the misconfiguration is loud, not silent.
+        """
+        return 1024
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         """Embed texts via the cached local BGE-M3 model.

@@ -79,7 +79,11 @@ def _ingestor_singleton() -> Ingestor:
     from ingestion.pipeline import ingest_document
 
     settings = get_settings()
-    sync_url = settings.database_sync_url or settings.database_url
+    sync_url = settings.database_sync_url
+    if not sync_url and settings.database_url:
+        sync_url = settings.database_url.replace(
+            "postgresql+asyncpg://", "postgresql+psycopg://"
+        )
     if not sync_url:
         raise service_unavailable("The ingestion section store is not configured.")
     return PipelineIngestor(

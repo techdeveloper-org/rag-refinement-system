@@ -211,7 +211,12 @@ def _decode_jwt(token: str, settings: Settings) -> dict[str, object]:
     if not settings.jwt_secret:
         raise unauthorized("Bearer authentication is not configured.")
     try:
-        options = {"require": ["exp", "sub"]}
+        required_claims = ["exp", "sub"]
+        if settings.jwt_issuer:
+            required_claims.append("iss")
+        if settings.jwt_audience:
+            required_claims.append("aud")
+        options = {"require": required_claims}
         decode_kwargs: dict[str, object] = {}
         if settings.jwt_audience:
             decode_kwargs["audience"] = settings.jwt_audience
@@ -244,9 +249,9 @@ def _resolve_jwt_principal(token: str, settings: Settings) -> Principal:
     """
     claims = _decode_jwt(token, settings)
     subject = str(claims.get("sub", ""))
-    if "tenant_id" in claims and claims["tenant_id"]:
+    if "tenant_id" in claims and claims["tenant_id"] is not None:
         tenant_id: object = claims["tenant_id"]
-    elif "tid" in claims and claims["tid"]:
+    elif "tid" in claims and claims["tid"] is not None:
         tenant_id = claims["tid"]
     else:
         tenant_id = None

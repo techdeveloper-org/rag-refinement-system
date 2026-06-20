@@ -102,7 +102,11 @@ class SqlAlchemySectionStore:
         """
         try:
             with self._session_factory() as session, session.begin():
-                row = session.get(Document, doc_id)
+                row = session.scalar(
+                    select(Document).where(
+                        Document.doc_id == doc_id, Document.tenant_id == tenant_id
+                    )
+                )
                 if row is None:
                     row = Document(doc_id=doc_id, tenant_id=tenant_id)
                     session.add(row)
@@ -133,6 +137,82 @@ class SqlAlchemySectionStore:
         """
         try:
             with self._session_factory() as session, session.begin():
+                session.execute(
+                    delete(Section).where(
+                        Section.doc_id == doc_id,
+                        Section.tenant_id == tenant_id,
+                    )
+                )
+                for row in rows:
+                    session.add(
+                        Section(
+                            section_id=row.section_id,
+                            doc_id=row.doc_id,
+                            tenant_id=row.tenant_id,
+                            title=row.title,
+                            level=row.level,
+                            page_start=row.page_start,
+                            page_end=row.page_end,
+                        )
+                    )
+                return len(rows)
+        except SQLAlchemyError as exc:
+            raise DependencyUnavailable("structure store unreachable") from exc
+
+    def upsert_document_and_replace_sections(
+        self,
+        doc_id: str,
+        tenant_id: str,
+        title: str | None,
+        domain: str | None,
+        total_pages: int,
+        content_hash_value: str | None,
+        ingest_status: str,
+        fallback_only: bool,
+        rows: list[SectionRow],
+    ) -> int:
+        """Atomically upsert the document row and replace its sections in one transaction.
+
+        Combines :meth:`upsert_document` and :meth:`replace_sections` in a single
+        database transaction so a partial failure cannot leave a document row without
+        matching section rows (or vice versa).
+
+        Args:
+            doc_id: Document primary key.
+            tenant_id: Owning tenant (IDOR guard on both document and section delete).
+            title: Optional title.
+            domain: Optional domain.
+            total_pages: Page count.
+            content_hash_value: Content hash (None in no-retention mode).
+            ingest_status: One of ``db.models.INGEST_STATUS_VALUES``.
+            fallback_only: True when no structure was detected (Scenario C).
+            rows: New section rows to persist (may be empty for fallback-only docs).
+
+        Returns:
+            The number of section rows written.
+
+        Raises:
+            DependencyUnavailable: When the structure store is unreachable.
+        """
+        try:
+            with self._session_factory() as session, session.begin():
+                doc_row = session.scalar(
+                    select(Document).where(
+                        Document.doc_id == doc_id, Document.tenant_id == tenant_id
+                    )
+                )
+                if doc_row is None:
+                    doc_row = Document(doc_id=doc_id, tenant_id=tenant_id)
+                    session.add(doc_row)
+                doc_row.tenant_id = tenant_id
+                doc_row.title = title
+                doc_row.domain = domain
+                doc_row.total_pages = total_pages
+                doc_row.content_hash = content_hash_value
+                doc_row.ingest_status = ingest_status
+                doc_row.fallback_only = fallback_only
+                doc_row.tombstoned_at = None
+
                 session.execute(
                     delete(Section).where(
                         Section.doc_id == doc_id,
@@ -203,5 +283,9 @@ class QdrantVectorStore:
             qm.PointStruct(id=point["id"], vector=point["vector"], payload=point["payload"])
             for point in points
         ]
-        client.upsert(collection_name=COLLECTION_NAME, points=structs)  # type: ignore[attr-defined]
+        result = client.upsert(collection_name=COLLECTION_NAME, points=structs)  # type: ignore[attr-defined]
+        if hasattr(result, "status") and result.status != qm.UpdateStatus.COMPLETED:
+            raise DependencyUnavailable(
+                f"Qdrant upsert did not complete; status={result.status}"
+            )
         return len(points)

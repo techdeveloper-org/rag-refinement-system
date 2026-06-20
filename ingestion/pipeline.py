@@ -130,12 +130,43 @@ class SectionStore(Protocol):
         """
         ...
 
-    def replace_sections(self, doc_id: str, rows: list[SectionRow]) -> int:
+    def replace_sections(self, tenant_id: str, doc_id: str, rows: list[SectionRow]) -> int:
         """Replace all sections for ``doc_id`` with ``rows`` (idempotent).
 
         Args:
+            tenant_id: Owning tenant (cross-tenant delete guard).
             doc_id: Document whose sections are replaced.
             rows: New section rows.
+
+        Returns:
+            The number of section rows written.
+        """
+        ...
+
+    def upsert_document_and_replace_sections(
+        self,
+        doc_id: str,
+        tenant_id: str,
+        title: str | None,
+        domain: str | None,
+        total_pages: int,
+        content_hash_value: str | None,
+        ingest_status: str,
+        fallback_only: bool,
+        rows: list[SectionRow],
+    ) -> int:
+        """Atomically upsert the document row and replace its sections.
+
+        Args:
+            doc_id: Document primary key.
+            tenant_id: Owning tenant.
+            title: Optional title.
+            domain: Optional domain.
+            total_pages: Page count.
+            content_hash_value: Content hash (None in no-retention mode).
+            ingest_status: One of the INGEST_STATUS_VALUES constants.
+            fallback_only: True when no structure was detected (Scenario C).
+            rows: New section rows to persist.
 
         Returns:
             The number of section rows written.
@@ -397,32 +428,24 @@ def ingest_document(
     section_rows_written = 0
     chunks_upserted = 0
 
-    if fallback_only_flag:
-        if not doc.no_retention:
-            section_store.upsert_document(
-                doc_id=doc_id,
-                tenant_id=doc.tenant_id,
-                title=doc.title,
-                domain=doc.domain,
-                total_pages=parsed.page_count,
-                content_hash_value=hash_value,
-                ingest_status="fallback_only",
-                fallback_only=True,
-            )
-    elif not doc.no_retention:
-        section_store.upsert_document(
+    ingest_status = (
+        "ephemeral" if doc.no_retention
+        else ("fallback_only" if fallback_only_flag else "indexed")
+    )
+
+    if not doc.no_retention and not fallback_only_flag:
+        pairs = _build_section_rows(doc_id, doc.tenant_id, toc.entries)
+        section_rows_written = section_store.upsert_document_and_replace_sections(
             doc_id=doc_id,
             tenant_id=doc.tenant_id,
             title=doc.title,
             domain=doc.domain,
             total_pages=parsed.page_count,
             content_hash_value=hash_value,
-            ingest_status="indexed",
+            ingest_status=ingest_status,
             fallback_only=False,
+            rows=[row for row, _ in pairs],
         )
-
-        pairs = _build_section_rows(doc_id, doc.tenant_id, toc.entries)
-        section_rows_written = section_store.replace_sections(doc_id, [row for row, _ in pairs])
 
         sections = [(row.section_id, entry) for row, entry in pairs]
         chunks = chunk_document(parsed, sections, doc_id, doc.tenant_id)
@@ -436,6 +459,17 @@ def ingest_document(
                 for chunk, vector in zip(chunks, vectors, strict=True)
             ]
             chunks_upserted = vector_store.upsert_points(points)
+    else:
+        section_store.upsert_document(
+            doc_id=doc_id,
+            tenant_id=doc.tenant_id,
+            title=doc.title,
+            domain=doc.domain,
+            total_pages=parsed.page_count,
+            content_hash_value=None if doc.no_retention else hash_value,
+            ingest_status=ingest_status,
+            fallback_only=fallback_only_flag,
+        )
 
     return IngestResult(
         doc_id=doc_id,
