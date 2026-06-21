@@ -66,6 +66,7 @@ class IngestInput:
     title: str | None = None
     domain: str | None = None
     no_retention: bool = False
+    force_reingest: bool = False
 
 
 @dataclass
@@ -508,7 +509,7 @@ def ingest_document(
             title=doc.title,
             domain=doc.domain,
             total_pages=parsed.page_count,
-            content_hash_value=hash_value,
+            content_hash_value=None if doc.no_retention else hash_value,
             ingest_status=effective_status,
             fallback_only=effective_fallback,
         )

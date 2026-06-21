@@ -152,10 +152,10 @@ class TestSqlAlchemySectionStore:
             fallback_only=False,
         )
         first = [_section_row("doc_1", i, "tenant_a") for i in range(3)]
-        written = store.replace_sections("doc_1", first)
+        written = store.replace_sections("tenant_a", "doc_1", first)
         assert written == 3
         second = [_section_row("doc_1", i, "tenant_a") for i in range(2)]
-        store.replace_sections("doc_1", second)
+        store.replace_sections("tenant_a", "doc_1", second)
         with sync_session_factory() as session:
             rows = (
                 session.execute(select(Section).where(Section.doc_id == "doc_1"))

@@ -229,17 +229,16 @@ class BgeM3Embedder:
         """
         model = self._ensure_model()
         result = model.encode(texts, return_dense=True)
-        dense = (
-            result.get("dense_vecs")
-            or result.get("dense")
-            or result.get("embeddings")
+        dense = next(
+            (v for k in ("dense_vecs", "dense", "embeddings") if (v := result.get(k)) is not None),
+            None,
         )
         if dense is None:
             raise RuntimeError(
                 f"FlagEmbedding returned unexpected output keys: {list(result.keys())}. "
                 f"Expected 'dense_vecs', 'dense', or 'embeddings'."
             )
-        return list(dense)
+        return dense.tolist()
 
 
 class FallbackEmbedder:

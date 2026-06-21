@@ -262,6 +262,8 @@ def _configure_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     yield
     get_settings.cache_clear()
     auth_module._api_key_store = None
+    import backend.app.security.rate_limit as _rl_module
+    _rl_module._rate_limiter = None
 
 
 @pytest.fixture

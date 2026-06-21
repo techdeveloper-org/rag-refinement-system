@@ -110,7 +110,7 @@ async def route_query(
     # doc_id that was not found rather than raising a generic 404.
     docs = []
     for doc_id, result in zip(document_ids, results):
-        if isinstance(result, Exception):
+        if isinstance(result, BaseException):
             raise result
         if result is None:
             raise document_not_found(f"Document '{doc_id}' not found.")

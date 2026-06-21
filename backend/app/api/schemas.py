@@ -249,7 +249,7 @@ class Document(_Strict):
     domain: str | None = None
     residency_region: ResidencyRegion
     fallback_only: bool
-    created_at: str
+    created_at: str | None = None
 
 
 class Pagination(_Strict):

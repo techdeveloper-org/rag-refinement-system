@@ -425,6 +425,7 @@ class TestPipelineIngestor:
                 "section_rows_written": 2,
                 "chunks_upserted": 8,
                 "fallback_only": False,
+                "total_pages": 12,
             }
 
         ingestor = PipelineIngestor(
@@ -466,6 +467,7 @@ class TestPipelineIngestor:
                 "section_rows_written": 1,
                 "chunks_upserted": 1,
                 "fallback_only": False,
+                "pre_existing": True,
             }
 
         ingestor = PipelineIngestor(
@@ -693,7 +695,7 @@ class TestGenerationAdapter:
 
         assert tokens == ["Hello", " world"]
         assert client.messages.calls[0]["model"] == adapter._model
-        assert client.messages.calls[0]["thinking"] == {"type": "adaptive"}
+        assert client.messages.calls[0]["thinking"] == {"type": "enabled", "budget_tokens": 5000}
 
     async def test_missing_package_maps_to_dependency_unavailable(self) -> None:
         """A missing anthropic package surfaces as DependencyUnavailable."""

@@ -158,7 +158,7 @@ class PyMuPDFParser:
             for index in range(doc.page_count):
                 try:
                     pages_list.append(self._parse_page(doc, index))
-                except Exception as exc:
+                except (fitz.FitzError, RuntimeError, AttributeError, ValueError, OSError) as exc:
                     logger.warning(
                         "Skipping page %d due to parse error: %s",
                         index,
@@ -169,7 +169,7 @@ class PyMuPDFParser:
                 for level, title, page in doc.get_toc(simple=True)
             )
             return ParsedDocument(
-                page_count=doc.page_count,
+                page_count=len(pages_list),
                 pages=tuple(pages_list),
                 native_toc=native_toc,
                 content_hash=content_hash(data),

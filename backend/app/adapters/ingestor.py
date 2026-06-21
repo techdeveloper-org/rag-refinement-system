@@ -31,7 +31,7 @@ import logging
 from backend.app.api.interfaces import DependencyUnavailable, IngestOutcome, SectionRecord
 from ingestion import section_id_for
 from ingestion.embedder import EmbedderDimensionError
-from ingestion.parser import Parser
+from ingestion.parser import ParseError, Parser
 from ingestion.pipeline import (
     IngestInput,
     SectionStore,
@@ -211,6 +211,14 @@ class PipelineIngestor:
                 title="Embedder misconfiguration",
                 detail=str(exc),
             ) from exc
+        except ParseError as exc:
+            from backend.app.errors import ProblemException
+            raise ProblemException(
+                status_code=422,
+                code="PARSE_ERROR",
+                title="Unprocessable Content",
+                detail=str(exc),
+            ) from exc
         except (AssertionError, ValueError, TypeError):
             raise
         except (ConnectionError, TimeoutError, IOError, OSError) as exc:
@@ -239,7 +247,7 @@ class PipelineIngestor:
                         doc_id_str, tenant_id, residency_region
                     )
                 )
-            except Exception:
+            except (ConnectionError, TimeoutError, IOError, OSError) as exc:
                 _logger.error(
                     "Failed to update residency_region after ingest",
                     extra={
@@ -251,7 +259,7 @@ class PipelineIngestor:
                 )
                 raise DependencyUnavailable(
                     f"Residency region update failed for doc {doc_id_str}; DPDP FR-028 compliance at risk."
-                )
+                ) from exc
 
         toc = list(result.get("toc") or [])
         fallback_only = bool(result.get("fallback_only", False))
