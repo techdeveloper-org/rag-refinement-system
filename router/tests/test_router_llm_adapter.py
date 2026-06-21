@@ -98,6 +98,7 @@ class TestClaudeHaikuRouterLLM:
 
     async def test_ensure_client_builds_and_caches_real_client(self) -> None:
         """With anthropic importable, the lazy client is built once and cached."""
+        pytest.importorskip("anthropic")
         adapter = ClaudeHaikuRouterLLM()
         client = adapter._ensure_client()
         assert client is not None

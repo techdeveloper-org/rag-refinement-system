@@ -69,6 +69,7 @@ def test_ingestor_provider_builds_singleton(
 ) -> None:
     """The ingestor provider builds a cached pipeline-backed adapter."""
     monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://u:p@localhost/db")
+    monkeypatch.setenv("DATABASE_SYNC_URL", "sqlite:///:memory:")
     monkeypatch.setenv("QDRANT_URL", "http://localhost:6333")
     first = deps.get_ingestor()
     second = deps.get_ingestor()
