@@ -384,9 +384,12 @@ async def _handle_unexpected(_request: Request, _exc: Exception) -> JSONResponse
     Returns:
         A generic 500 INTERNAL_ERROR problem response.
     """
-    _logger.exception(
-        "Unhandled exception on %s %s", _request.method, _request.url.path
-    )
+    if _request is not None:
+        _logger.exception(
+            "Unhandled exception on %s %s", _request.method, _request.url.path
+        )
+    else:
+        _logger.exception("Unhandled exception (request unavailable)")
     return _problem_response(internal_error())
 
 

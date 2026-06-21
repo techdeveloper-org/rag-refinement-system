@@ -43,7 +43,7 @@ async def _route(fake: FakeRouterLLM, toc: list[dict], **kwargs: Any) -> dict:
         "max_sections": 3,
     }
     params.update(kwargs)
-    return await route("How long is the warranty?", "doc_abc123", toc, **params)  # type: ignore[call-arg]
+    return await route("How long is the warranty?", "doc_abc123", toc, **params)  # type: ignore[arg-type]
 
 
 async def test_single_llm_call_per_query(golden_toc: list[dict]) -> None:

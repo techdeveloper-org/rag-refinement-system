@@ -53,7 +53,7 @@ def _to_document_record(row: Document) -> DocumentRecord:
         domain=row.domain,
         residency_region=row.residency_region,
         fallback_only=row.fallback_only,
-        created_at=row.created_at.isoformat() if row.created_at is not None else None,
+        created_at=row.created_at.isoformat() if row.created_at is not None else "",
         pii_flags=dict(row.pii_flags or {}),
     )
 
@@ -218,6 +218,8 @@ class SqlAlchemyDocumentStore:
                     live_doc_id = (await session.execute(doc_stmt)).scalar_one_or_none()
                     if live_doc_id is None:
                         return []
+            async with self._session_factory() as session:
+                async with session.begin():
                     rows = (await session.execute(section_stmt)).scalars().all()
         except SQLAlchemyError as exc:
             raise DependencyUnavailable("structure store unreachable") from exc

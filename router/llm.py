@@ -88,16 +88,9 @@ class ClaudeHaikuRouterLLM:
             try:
                 import anthropic
             except ImportError as exc:
-                try:
-                    from backend.app.api.interfaces import DependencyUnavailable
-
-                    raise DependencyUnavailable(
-                        "anthropic package is required for ClaudeHaikuRouterLLM"
-                    ) from exc
-                except ImportError:
-                    raise ImportError(
-                        "anthropic package is required for ClaudeHaikuRouterLLM"
-                    ) from exc
+                raise RuntimeError(
+                    "anthropic package is required for ClaudeHaikuRouterLLM"
+                ) from exc
             self._client = anthropic.AsyncAnthropic()
         return self._client
 

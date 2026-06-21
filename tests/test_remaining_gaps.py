@@ -170,9 +170,9 @@ class TestGenerationEnsureClient:
         from backend.app.adapters.generation import ClaudeGenerationLLM
 
         adapter = ClaudeGenerationLLM()
-        client = adapter._ensure_client()
+        client = await adapter._ensure_client()
         assert client is not None
-        assert adapter._ensure_client() is client
+        assert await adapter._ensure_client() is client
 
 
 class TestQdrantVectorStoreEnsureClient:

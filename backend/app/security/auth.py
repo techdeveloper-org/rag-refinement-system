@@ -144,14 +144,14 @@ class ApiKeyStore:
             new_plaintext_key: The replacement key.
 
         Raises:
-            ValueError: If the old key is not registered.
+            KeyError: If the old key is not registered.
         """
         old_digest = hash_api_key(old_plaintext_key, self._salt)
         new_digest = hash_api_key(new_plaintext_key, self._salt)
         with self._lock:
             record = self._records.get(old_digest)
             if record is None:
-                raise ValueError("API key is not registered.")
+                raise KeyError("unknown api key")
             del self._records[old_digest]
             self._records[new_digest] = ApiKeyRecord(
                 key_hash=new_digest, tenant_id=record.tenant_id, subject=record.subject, active=True

@@ -63,7 +63,10 @@ class Settings(BaseSettings):
     jwt_algorithm: Literal["HS256", "HS384", "HS512"] = Field(
         default="HS256",
         alias="JWT_ALGORITHM",
-        description="JWT signing algorithm — restricted to HMAC-SHA variants to prevent alg:none bypass.",
+        description=(
+            "JWT signing algorithm — restricted to HMAC-SHA variants"
+            " to prevent alg:none bypass."
+        ),
     )
     jwt_audience: str | None = Field(default=None, alias="JWT_AUDIENCE")
     jwt_issuer: str | None = Field(default=None, alias="JWT_ISSUER")
@@ -94,7 +97,7 @@ class Settings(BaseSettings):
     )
 
     @model_validator(mode="after")
-    def warn_cors_wildcard(self) -> "Settings":
+    def warn_cors_wildcard(self) -> Settings:
         """Emit a startup warning when CORS is configured to allow all origins.
 
         Returns:

@@ -125,10 +125,10 @@ def test_tenant_section_filter_encodes_tenant_and_sections() -> None:
     assert keys == {"tenant_id", "section_id"}
 
     tenant_cond = next(c for c in flt.must if c.key == "tenant_id")  # type: ignore[union-attr]
-    assert tenant_cond.match.value == "tenant_42"
+    assert tenant_cond.match.value == "tenant_42"  # type: ignore[union-attr]
 
     section_cond = next(c for c in flt.must if c.key == "section_id")  # type: ignore[union-attr]
-    assert set(section_cond.match.any) == {"sec_a", "sec_b"}
+    assert set(section_cond.match.any) == {"sec_a", "sec_b"}  # type: ignore[union-attr]
 
 
 def test_filter_isolates_by_tenant_id() -> None:

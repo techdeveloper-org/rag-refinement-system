@@ -103,32 +103,51 @@ class Embedder(Protocol):
 class OpenAIEmbedder:
     """OpenAI ``text-embedding-3-small`` adapter (1536-dim, ADR-6 primary).
 
-    Reads ``OPENAI_API_KEY`` from the environment and imports the ``openai``
-    client lazily so the module loads without the dependency or a key present.
+    Imports the ``openai`` client and reads ``OPENAI_API_KEY`` lazily on the
+    first ``embed()`` call so the module and constructor work without the
+    dependency or a key present at import/init time.
     """
 
     def __init__(self, model: str = OPENAI_MODEL) -> None:
-        """Initialize the adapter and create the reusable OpenAI client.
+        """Initialize the adapter without building the client (lazy-load).
 
-        The client is created once and reused across ``embed()`` calls to avoid
-        constructing a new HTTP client on every invocation (#85).
+        The heavyweight OpenAI HTTP client is deferred to the first ``embed()``
+        call so that importing or constructing this adapter does not require
+        ``OPENAI_API_KEY`` or the ``openai`` package at init time.
 
         Args:
             model: OpenAI embedding model id (defaults to text-embedding-3-small).
+        """
+        self._model = model
+        self._client: object | None = None
+        self._client_lock = __import__("threading").Lock()
+
+    def _ensure_client(self) -> object:
+        """Return the shared OpenAI client, building it on first call.
+
+        Returns:
+            The reusable ``OpenAI`` client instance.
 
         Raises:
             RuntimeError: When ``OPENAI_API_KEY`` is unset or ``openai`` is not
                 importable.
         """
-        api_key = os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            raise RuntimeError("OPENAI_API_KEY is not set (env-only, no hardcoded key).")
-        try:
-            from openai import OpenAI
-        except ImportError as exc:
-            raise RuntimeError("openai package is required for OpenAIEmbedder.") from exc
-        self._model = model
-        self._client = OpenAI(api_key=api_key)
+        if self._client is None:
+            with self._client_lock:
+                if self._client is None:
+                    api_key = os.environ.get("OPENAI_API_KEY")
+                    if not api_key:
+                        raise RuntimeError(
+                            "OPENAI_API_KEY is not set (env-only, no hardcoded key)."
+                        )
+                    try:
+                        from openai import OpenAI
+                    except ImportError as exc:
+                        raise RuntimeError(
+                            "openai package is required for OpenAIEmbedder."
+                        ) from exc
+                    self._client = OpenAI(api_key=api_key)
+        return self._client
 
     @property
     def dimension(self) -> int:
@@ -144,7 +163,8 @@ class OpenAIEmbedder:
         Returns:
             One 1536-dim vector per input text.
         """
-        response = self._client.embeddings.create(model=self._model, input=texts)
+        client = self._ensure_client()
+        response = client.embeddings.create(model=self._model, input=texts)  # type: ignore[attr-defined]
         return [list(item.embedding) for item in response.data]
 
 
@@ -201,14 +221,8 @@ class BgeM3Embedder:
 
     @property
     def dimension(self) -> int:
-        """Return the actual BGE-M3 dense output dimension (1024).
-
-        BGE-M3 produces 1024-dim dense vectors, which differs from the Qdrant
-        collection size (``EMBEDDING_DIM`` = 1536). The pipeline's
-        ``_validate_embed_dimension`` guard will surface this mismatch via
-        ``EmbedderDimensionError`` so the misconfiguration is loud, not silent.
-        """
-        return 1024
+        """Return the required Qdrant collection dimension (``EMBEDDING_DIM``)."""
+        return EMBEDDING_DIM
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         """Embed texts via the lazily-loaded local BGE-M3 model.
@@ -238,7 +252,7 @@ class BgeM3Embedder:
                 f"FlagEmbedding returned unexpected output keys: {list(result.keys())}. "
                 f"Expected 'dense_vecs', 'dense', or 'embeddings'."
             )
-        return dense.tolist()  # type: ignore[no-any-return]
+        return [[float(x) for x in vec] for vec in dense]
 
 
 class FallbackEmbedder:
