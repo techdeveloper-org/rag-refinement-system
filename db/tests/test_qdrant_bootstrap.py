@@ -74,7 +74,7 @@ def test_vector_size_matches_embedding_model() -> None:
 def test_collection_created_when_absent() -> None:
     """Bootstrap creates the collection with the correct config when absent."""
     client = FakeQdrantClient(existing=False)
-    result = bootstrap_collection(client)
+    result = bootstrap_collection(client)  # type: ignore[arg-type]
     assert result.created is True
     assert len(client.created_collections) == 1
     created = client.created_collections[0]
@@ -86,7 +86,7 @@ def test_collection_created_when_absent() -> None:
 def test_collection_created_idempotent() -> None:
     """Bootstrap skips creation when the collection already exists."""
     client = FakeQdrantClient(existing=True)
-    result = bootstrap_collection(client)
+    result = bootstrap_collection(client)  # type: ignore[arg-type]
     assert result.created is False
     assert client.created_collections == []
 
@@ -94,7 +94,7 @@ def test_collection_created_idempotent() -> None:
 def test_payload_index_on_section_id_doc_id_and_tenant_id() -> None:
     """Payload indexes are ensured on section_id, doc_id and tenant_id."""
     client = FakeQdrantClient(existing=False)
-    bootstrap_collection(client)
+    bootstrap_collection(client)  # type: ignore[arg-type]
     assert set(client.payload_indexes) == set(PAYLOAD_INDEX_FIELDS)
     assert "tenant_id" in client.payload_indexes
     assert "section_id" in client.payload_indexes
@@ -121,20 +121,20 @@ def test_tenant_filter_is_mandatory() -> None:
 def test_tenant_section_filter_encodes_tenant_and_sections() -> None:
     """The retrieval filter ANDs tenant_id equality with section_id IN (...)."""
     flt = tenant_section_filter("tenant_42", ["sec_a", "sec_b"])
-    keys = {cond.key for cond in flt.must}
+    keys = {cond.key for cond in flt.must}  # type: ignore[union-attr]
     assert keys == {"tenant_id", "section_id"}
 
-    tenant_cond = next(c for c in flt.must if c.key == "tenant_id")
-    assert tenant_cond.match.value == "tenant_42"
+    tenant_cond = next(c for c in flt.must if c.key == "tenant_id")  # type: ignore[union-attr]
+    assert tenant_cond.match.value == "tenant_42"  # type: ignore[union-attr]
 
-    section_cond = next(c for c in flt.must if c.key == "section_id")
-    assert set(section_cond.match.any) == {"sec_a", "sec_b"}
+    section_cond = next(c for c in flt.must if c.key == "section_id")  # type: ignore[union-attr]
+    assert set(section_cond.match.any) == {"sec_a", "sec_b"}  # type: ignore[union-attr]
 
 
 def test_filter_isolates_by_tenant_id() -> None:
     """Two tenants produce distinct, non-overlapping tenant guards."""
     a = tenant_section_filter("tenant_a", ["sec_x"])
     b = tenant_section_filter("tenant_b", ["sec_x"])
-    a_tenant = next(c for c in a.must if c.key == "tenant_id").match.value
-    b_tenant = next(c for c in b.must if c.key == "tenant_id").match.value
+    a_tenant = next(c for c in a.must if c.key == "tenant_id").match.value  # type: ignore[union-attr]
+    b_tenant = next(c for c in b.must if c.key == "tenant_id").match.value  # type: ignore[union-attr]
     assert a_tenant != b_tenant

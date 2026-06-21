@@ -19,11 +19,11 @@ import logging
 from typing import Any
 
 from fastapi import FastAPI, Request, status
-
-_logger = logging.getLogger(__name__)
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
+_logger = logging.getLogger(__name__)
 
 PROBLEM_MEDIA_TYPE = "application/problem+json"
 _PROBLEM_BASE_URI = "https://api.rag-refinement.example.com/problems/"
@@ -384,9 +384,12 @@ async def _handle_unexpected(_request: Request, _exc: Exception) -> JSONResponse
     Returns:
         A generic 500 INTERNAL_ERROR problem response.
     """
-    _logger.exception(
-        "Unhandled exception on %s %s", _request.method, _request.url.path
-    )
+    if _request is not None:
+        _logger.exception(
+            "Unhandled exception on %s %s", _request.method, _request.url.path
+        )
+    else:
+        _logger.exception("Unhandled exception (request unavailable)")
     return _problem_response(internal_error())
 
 
@@ -396,7 +399,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     Args:
         app: The FastAPI application to configure.
     """
-    app.add_exception_handler(ProblemException, _handle_problem)
-    app.add_exception_handler(RequestValidationError, _handle_request_validation)
-    app.add_exception_handler(StarletteHTTPException, _handle_http_exception)
+    app.add_exception_handler(ProblemException, _handle_problem)  # type: ignore[arg-type]
+    app.add_exception_handler(RequestValidationError, _handle_request_validation)  # type: ignore[arg-type]
+    app.add_exception_handler(StarletteHTTPException, _handle_http_exception)  # type: ignore[arg-type]
     app.add_exception_handler(Exception, _handle_unexpected)

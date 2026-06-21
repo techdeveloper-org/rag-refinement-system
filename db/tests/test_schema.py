@@ -82,13 +82,13 @@ def test_every_model_has_tenant_id_not_null() -> None:
 
 def test_section_id_is_primary_key_and_universal() -> None:
     """``section_id`` is the single-column PK of ``sections``."""
-    pk_cols = [c.name for c in Section.__table__.primary_key.columns]
+    pk_cols = [c.name for c in Section.__table__.primary_key.columns]  # type: ignore[attr-defined]
     assert pk_cols == ["section_id"]
 
 
 def test_doc_id_is_primary_key() -> None:
     """``doc_id`` is the single-column PK of ``documents``."""
-    pk_cols = [c.name for c in Document.__table__.primary_key.columns]
+    pk_cols = [c.name for c in Document.__table__.primary_key.columns]  # type: ignore[attr-defined]
     assert pk_cols == ["doc_id"]
 
 
@@ -124,7 +124,7 @@ def test_page_range_check_constraint() -> None:
     """A ``page_start <= page_end`` CHECK guards section page ranges (OAQ-3)."""
     check_texts = [
         str(c.sqltext)
-        for c in Section.__table__.constraints
+        for c in Section.__table__.constraints  # type: ignore[attr-defined]
         if c.__class__.__name__ == "CheckConstraint"
     ]
     assert any("page_start <= page_end" in t for t in check_texts)

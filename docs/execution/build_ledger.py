@@ -210,7 +210,8 @@ add("TODO-17", "PhaseG deploy and README refresh", "G", "G", ["TODO-16"],
 ledger_path = os.path.join(EXEC, "ledger.json")
 existing = {}
 if os.path.exists(ledger_path):
-    old = json.load(open(ledger_path, encoding="utf-8"))
+    with open(ledger_path, "r", encoding="utf-8") as f:
+        old = json.load(f)
     existing = {x["id"]: x for x in old.get("todos", [])}
 
 for t in todos:

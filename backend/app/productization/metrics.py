@@ -34,6 +34,7 @@ class _Accumulator:
 
     count: int = 0
     total: float = 0.0
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def observe(self, value: float) -> None:
         """Record one observation.
@@ -41,8 +42,9 @@ class _Accumulator:
         Args:
             value: The observed value to add to the running sum.
         """
-        self.count += 1
-        self.total += value
+        with self._lock:
+            self.count += 1
+            self.total += value
 
     @property
     def average(self) -> float:
@@ -51,9 +53,20 @@ class _Accumulator:
         Returns:
             The arithmetic mean, or 0.0 if no observation has been recorded.
         """
-        if self.count == 0:
-            return 0.0
-        return self.total / self.count
+        with self._lock:
+            if self.count == 0:
+                return 0.0
+            return self.total / self.count
+
+    def reset(self) -> None:
+        """Reset count and total to zero in-place under lock.
+
+        Callers that hold a reference to this accumulator continue to see the
+        same instance; only the stored values are cleared.
+        """
+        with self._lock:
+            self.count = 0
+            self.total = 0.0
 
 
 @dataclass
@@ -73,7 +86,7 @@ class ProductMetrics:
     routing_latency_ms: _Accumulator = field(default_factory=_Accumulator)
     routing_total: int = 0
     fallback_total: int = 0
-    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+    _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
 
     def record_routing(
         self,
@@ -128,10 +141,11 @@ class ProductMetrics:
         with self._lock:
             token_reduction_avg = self.token_reduction.average
             accuracy_avg = self.answer_accuracy.average
-            latency_avg = self.routing_latency_ms.average
+            with self.routing_latency_ms._lock:
+                latency_sum = self.routing_latency_ms.total
+                latency_count = self.routing_latency_ms.count
             routing_total = self.routing_total
             fallback_total = self.fallback_total
-            fallback_rate = fallback_total / routing_total if routing_total > 0 else 0.0
 
         lines = [
             "# HELP rag_token_reduction_ratio Avg token-reduction fraction vs full-doc RAG.",
@@ -140,27 +154,32 @@ class ProductMetrics:
             "# HELP rag_answer_accuracy_ratio Average evaluated answer-accuracy score.",
             "# TYPE rag_answer_accuracy_ratio gauge",
             f"rag_answer_accuracy_ratio {accuracy_avg}",
-            "# HELP rag_routing_latency_ms Average router latency in milliseconds.",
-            "# TYPE rag_routing_latency_ms gauge",
-            f"rag_routing_latency_ms {latency_avg}",
+            "# HELP rag_routing_latency_ms_sum Sum of router latencies in milliseconds.",
+            "# TYPE rag_routing_latency_ms_sum counter",
+            f"rag_routing_latency_ms_sum {latency_sum}",
+            "# HELP rag_routing_latency_ms_count Total latency observations.",
+            "# TYPE rag_routing_latency_ms_count counter",
+            f"rag_routing_latency_ms_count {latency_count}",
             "# HELP rag_routing_total Total routing decisions made.",
             "# TYPE rag_routing_total counter",
             f"rag_routing_total {routing_total}",
             "# HELP rag_fallback_total Total routing decisions that fell back.",
             "# TYPE rag_fallback_total counter",
             f"rag_fallback_total {fallback_total}",
-            "# HELP rag_fallback_rate Fraction of routing decisions that fell back.",
-            "# TYPE rag_fallback_rate gauge",
-            f"rag_fallback_rate {fallback_rate}",
         ]
         return "\n".join(lines) + "\n"
 
     def reset(self) -> None:
-        """Reset all accumulators and counters to their empty state."""
+        """Reset all accumulators and counters to their empty state.
+
+        Each accumulator is cleared in-place so that background tasks holding
+        references to the same instances continue to write to the correct
+        objects rather than to discarded ones.
+        """
         with self._lock:
-            self.token_reduction = _Accumulator()
-            self.answer_accuracy = _Accumulator()
-            self.routing_latency_ms = _Accumulator()
+            self.token_reduction.reset()
+            self.answer_accuracy.reset()
+            self.routing_latency_ms.reset()
             self.routing_total = 0
             self.fallback_total = 0
 

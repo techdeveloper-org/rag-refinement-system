@@ -137,7 +137,14 @@ class ClaudeGenerationLLM:
                 when the Anthropic API is unreachable / returns an auth or rate-limit
                 error.
         """
-        client = await self._ensure_client()
+        try:
+            client = await self._ensure_client()
+        except DependencyUnavailable:
+            raise
+        except Exception as exc:
+            raise DependencyUnavailable(
+                f"Generation dependency error: {type(exc).__name__}"
+            ) from exc
         context = _build_context(sections)
         user_message = (
             "<question>\n"

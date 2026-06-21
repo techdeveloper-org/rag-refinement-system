@@ -13,8 +13,17 @@ No PDF bytes are retained beyond parsing; the caller decides retention.
 from __future__ import annotations
 
 import hashlib
+import logging
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
+
+logger = logging.getLogger(__name__)
+
+MAX_PDF_BYTES: int = 100 * 1024 * 1024  # 100 MB — fix #246
+
+
+class ParseError(ValueError):
+    """Raised when a PDF cannot be parsed due to content or structural issues."""
 
 
 @dataclass(frozen=True)
@@ -122,6 +131,7 @@ class PyMuPDFParser:
 
         Raises:
             RuntimeError: When PyMuPDF (``fitz``) is not importable.
+            ParseError: When the PDF is password-protected or exceeds MAX_PDF_BYTES.
         """
         try:
             import fitz
@@ -130,16 +140,37 @@ class PyMuPDFParser:
                 "PyMuPDF (fitz) is required for PyMuPDFParser; install pymupdf."
             ) from exc
 
+        if len(data) > MAX_PDF_BYTES:
+            raise ParseError(
+                f"PDF file size ({len(data):,} bytes) exceeds maximum allowed size "
+                f"({MAX_PDF_BYTES:,} bytes). Please split the document."
+            )
+
         doc = fitz.open(stream=data, filetype="pdf")
+        if doc.needs_pass or doc.is_encrypted:
+            doc.close()
+            raise ParseError(
+                "Document is password-protected and cannot be parsed. "
+                "Please provide an unencrypted version."
+            )
         try:
-            pages = tuple(self._parse_page(doc, index) for index in range(doc.page_count))
+            pages_list: list[Page] = []
+            for index in range(doc.page_count):
+                try:
+                    pages_list.append(self._parse_page(doc, index))
+                except (fitz.FitzError, RuntimeError, AttributeError, ValueError, OSError) as exc:
+                    logger.warning(
+                        "Skipping page %d due to parse error: %s",
+                        index,
+                        exc,
+                    )
             native_toc = tuple(
                 (int(level), str(title), int(page))
                 for level, title, page in doc.get_toc(simple=True)
             )
             return ParsedDocument(
-                page_count=doc.page_count,
-                pages=pages,
+                page_count=len(pages_list),
+                pages=tuple(pages_list),
                 native_toc=native_toc,
                 content_hash=content_hash(data),
             )

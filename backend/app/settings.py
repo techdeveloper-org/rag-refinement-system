@@ -9,9 +9,11 @@ reflects which dependencies are configured.
 
 from __future__ import annotations
 
+import warnings
 from functools import lru_cache
+from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -58,7 +60,14 @@ class Settings(BaseSettings):
     )
 
     jwt_secret: str | None = Field(default=None, alias="JWT_SECRET")
-    jwt_algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
+    jwt_algorithm: Literal["HS256", "HS384", "HS512"] = Field(
+        default="HS256",
+        alias="JWT_ALGORITHM",
+        description=(
+            "JWT signing algorithm — restricted to HMAC-SHA variants"
+            " to prevent alg:none bypass."
+        ),
+    )
     jwt_audience: str | None = Field(default=None, alias="JWT_AUDIENCE")
     jwt_issuer: str | None = Field(default=None, alias="JWT_ISSUER")
 
@@ -86,6 +95,21 @@ class Settings(BaseSettings):
     max_upload_bytes: int = Field(
         default=50 * 1024 * 1024, alias="MAX_UPLOAD_BYTES"
     )
+
+    @model_validator(mode="after")
+    def warn_cors_wildcard(self) -> Settings:
+        """Emit a startup warning when CORS is configured to allow all origins.
+
+        Returns:
+            This settings instance, unchanged.
+        """
+        if "*" in self.cors_allowed_origins:
+            warnings.warn(
+                "CORS is configured to allow all origins ('*'). "
+                "Set CORS_ALLOWED_ORIGINS to restrict access in production.",
+                stacklevel=2,
+            )
+        return self
 
 
 @lru_cache

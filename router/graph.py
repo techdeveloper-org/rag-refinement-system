@@ -327,7 +327,7 @@ def _build_langgraph(llm: RouterLLM) -> object | None:
     builder.add_edge("route", "threshold")
     builder.add_edge("threshold", "build_output")
     builder.add_edge("build_output", END)
-    return builder.compile()
+    return builder.compile()  # type: ignore[no-any-return]
 
 
 async def _run_pipeline_fallback(state: RouterState, llm: RouterLLM) -> RouterState:

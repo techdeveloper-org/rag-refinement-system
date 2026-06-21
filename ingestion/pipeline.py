@@ -1,4 +1,4 @@
-"""Ingestion pipeline orchestration (STORY-003/008/009/011).
+﻿"""Ingestion pipeline orchestration (STORY-003/008/009/011).
 
 Implements the data-engineer-owned ``ingest_document`` entry point that backend
 calls: parse -> TOC -> section-aware chunk -> embed -> upsert, writing section
@@ -23,6 +23,7 @@ with no network, no real key, and no live database.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
@@ -32,6 +33,11 @@ from ingestion.embedder import EMBEDDING_DIM, Embedder, EmbedderDimensionError
 from ingestion.ids import doc_id_for, section_id_for
 from ingestion.parser import Parser, content_hash
 from ingestion.toc_extractor import LlmRefiner, TocEntry, extract_toc
+
+_log = logging.getLogger(__name__)
+
+_EMBED_BATCH_SIZE: int = 256
+"""Maximum number of chunk texts sent to the embedder in a single call (Fix #247)."""
 
 _DOC_ID_NAMESPACE = uuid.UUID("6ba7b811-9dad-11d1-80b4-00c04fd430c8")
 """Stable namespace so a content hash maps to a deterministic doc_id (idempotency).
@@ -60,6 +66,7 @@ class IngestInput:
     title: str | None = None
     domain: str | None = None
     no_retention: bool = False
+    force_reingest: bool = False
 
 
 @dataclass
@@ -172,6 +179,23 @@ class SectionStore(Protocol):
 
         Returns:
             The number of section rows written.
+        """
+        ...
+
+    def update_residency_region(self, doc_id: str, tenant_id: str, residency_region: str) -> None:
+        """Update the residency_region for a document after ingestion (DPDP FR-028).
+
+        Called after the pipeline completes to stamp the data-residency region that
+        the synchronous pipeline cannot persist because ``IngestInput`` carries no
+        residency field.
+
+        Args:
+            doc_id: Document primary key.
+            tenant_id: Owning tenant (IDOR guard).
+            residency_region: One of IN, EU, US, GLOBAL.
+
+        Raises:
+            DependencyUnavailable: When the structure store is unreachable.
         """
         ...
 
@@ -416,11 +440,15 @@ def ingest_document(
         raise ValueError("Document content is empty; cannot ingest zero-byte file.")
 
     hash_value = content_hash(doc.data)
-    if not doc.no_retention:
-        existing = section_store.find_doc_id_by_hash(doc.tenant_id, hash_value)
-    else:
-        existing = None
+    existing = section_store.find_doc_id_by_hash(doc.tenant_id, hash_value)
     doc_id = existing or _deterministic_doc_id(doc.tenant_id, hash_value)
+
+    if existing is not None and not doc.no_retention and not getattr(doc, "force_reingest", False):
+        _log.info("Skipping re-ingest for pre-existing doc_id=%s tenant=%s", doc_id, doc.tenant_id)
+        return IngestResult(
+            doc_id=doc_id,
+            pre_existing=True,
+        ).as_dict()
 
     parsed = parser.parse(doc.data)
     toc = extract_toc(parsed, llm_refiner=llm_refiner)
@@ -453,15 +481,28 @@ def ingest_document(
         chunks = chunk_document(parsed, sections, doc_id, doc.tenant_id)
 
         if chunks:
-            vectors = _validate_embed_dimension(
-                embedder.embed([chunk.text for chunk in chunks])
-            )
+            texts = [chunk.text for chunk in chunks]
+            all_vectors: list[list[float]] = []
+            for _i in range(0, len(texts), _EMBED_BATCH_SIZE):
+                all_vectors.extend(embedder.embed(texts[_i:_i + _EMBED_BATCH_SIZE]))
+            vectors = _validate_embed_dimension(all_vectors)
             points = [
                 _chunk_point(chunk, vector)
                 for chunk, vector in zip(chunks, vectors, strict=True)
             ]
             chunks_upserted = vector_store.upsert_points(points)
     else:
+        if existing is not None and fallback_only_flag and not doc.no_retention:
+            _log.warning(
+                "Skipping ingest_status downgrade for doc_id=%s: "
+                "preserving existing indexed status over transient fallback_only.",
+                doc_id,
+            )
+            effective_status = "indexed"
+            effective_fallback = False
+        else:
+            effective_status = ingest_status
+            effective_fallback = fallback_only_flag
         section_store.upsert_document(
             doc_id=doc_id,
             tenant_id=doc.tenant_id,
@@ -469,8 +510,8 @@ def ingest_document(
             domain=doc.domain,
             total_pages=parsed.page_count,
             content_hash_value=None if doc.no_retention else hash_value,
-            ingest_status=ingest_status,
-            fallback_only=fallback_only_flag,
+            ingest_status=effective_status,
+            fallback_only=effective_fallback,
         )
 
     return IngestResult(

@@ -1,4 +1,4 @@
-"""Ingestor adapter binding ``ingestion.ingest_document`` to the backend Protocol.
+﻿"""Ingestor adapter binding ``ingestion.ingest_document`` to the backend Protocol.
 
 The backend :class:`Ingestor` Protocol is ``ingest_document(tenant_id, content,
 filename, title, domain, no_retention, residency_region, ocr) -> IngestOutcome``.
@@ -22,6 +22,7 @@ satisfy the backend ``SectionId`` schema pattern.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from typing import Any
 
@@ -30,7 +31,7 @@ import anyio
 from backend.app.api.interfaces import DependencyUnavailable, IngestOutcome, SectionRecord
 from ingestion import section_id_for
 from ingestion.embedder import EmbedderDimensionError
-from ingestion.parser import Parser
+from ingestion.parser import ParseError, Parser
 from ingestion.pipeline import (
     IngestInput,
     SectionStore,
@@ -40,6 +41,8 @@ from ingestion.toc_extractor import LlmRefiner
 
 IngestCallable = Callable[..., dict[str, Any]]
 """Signature of ``ingestion.ingest_document`` (kept injectable for tests)."""
+
+_logger = logging.getLogger(__name__)
 
 _INGEST_STATUS_FALLBACK = "fallback_only"
 _INGEST_STATUS_EPHEMERAL = "ephemeral"
@@ -208,25 +211,56 @@ class PipelineIngestor:
                 title="Embedder misconfiguration",
                 detail=str(exc),
             ) from exc
-        except (AssertionError, ValueError, TypeError) as programming_error:
+        except ParseError as exc:
+            from backend.app.errors import ProblemException
+            raise ProblemException(
+                status_code=422,
+                code="PARSE_ERROR",
+                title="Unprocessable Content",
+                detail=str(exc),
+            ) from exc
+        except (AssertionError, ValueError, TypeError):
             raise
-        except Exception as exc:
-            raise DependencyUnavailable("Ingestion pipeline failed; check service logs for details.") from exc
+        except OSError as exc:
+            _logger.error("Dependency unavailable during ingest: %s", exc, exc_info=True)
+            raise DependencyUnavailable("Ingestion pipeline dependency failed") from exc
+        except Exception:
+            raise
 
         doc_id_str = str(result["doc_id"])
         try:
             from router.graph import invalidate_toc_cache
             invalidate_toc_cache(doc_id_str)
-        except (ImportError, Exception):
+        except ImportError:
             pass
+        except Exception as exc:
+            _logger.warning(
+                "Failed to invalidate router TOC cache after ingest: %s",
+                exc,
+                exc_info=True,
+            )
 
         if not no_retention and residency_region != "GLOBAL":
             try:
-                self._section_store.update_residency_region(
-                    doc_id_str, tenant_id, residency_region
+                await anyio.to_thread.run_sync(
+                    lambda: self._section_store.update_residency_region(
+                        doc_id_str, tenant_id, residency_region
+                    )
                 )
-            except Exception:
-                pass
+            except OSError as exc:
+                _logger.error(
+                    "Failed to update residency_region after ingest",
+                    extra={
+                        "doc_id": doc_id_str,
+                        "tenant_id": tenant_id,
+                        "residency_region": residency_region,
+                    },
+                    exc_info=True,
+                )
+                raise DependencyUnavailable(
+                    f"Residency region update failed for doc {doc_id_str};"
+                    " DPDP FR-028 compliance at risk."
+                ) from exc
 
         toc = list(result.get("toc") or [])
         fallback_only = bool(result.get("fallback_only", False))

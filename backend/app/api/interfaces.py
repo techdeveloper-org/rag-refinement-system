@@ -18,7 +18,7 @@ The dataclasses mirror the AGREED CONTRACT shapes:
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
@@ -98,7 +98,7 @@ class DocumentRecord:
         domain: Optional domain label.
         residency_region: Data-residency region (FR-028).
         fallback_only: True for Scenario-C documents (OAQ-6).
-        created_at: ISO-8601 creation timestamp.
+        created_at: ISO-8601 creation timestamp, or None when the column is NULL.
         pii_flags: PII field-name annotations only (FR-029).
     """
 
@@ -109,7 +109,7 @@ class DocumentRecord:
     domain: str | None
     residency_region: str
     fallback_only: bool
-    created_at: str
+    created_at: str | None
     pii_flags: dict[str, str] = field(default_factory=dict)
 
 
@@ -208,11 +208,11 @@ class Ingestor(Protocol):
 class GenerationLLM(Protocol):
     """Streaming generation interface (ai-engineer-owned; faked in tests)."""
 
-    async def stream_answer(
+    def stream_answer(
         self,
         query: str,
         sections: list[RoutedSection],
-    ) -> AsyncIterator[str]:
+    ) -> AsyncGenerator[str, None]:
         """Yield answer token fragments for the routed sections."""
         ...
 

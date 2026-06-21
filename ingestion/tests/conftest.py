@@ -164,10 +164,16 @@ class FakeSectionStore:
         if content_hash_value is not None:
             self.hash_index[(tenant_id, content_hash_value)] = doc_id
 
-    def replace_sections(self, doc_id: str, rows: list[SectionRow]) -> int:
+    def replace_sections(
+        self,
+        tenant_id: str,
+        doc_id: str,
+        rows: list[SectionRow],
+    ) -> int:
         """Replace the document's sections with ``rows`` (idempotent).
 
         Args:
+            tenant_id: Owning tenant (cross-tenant delete guard).
             doc_id: Document whose sections are replaced.
             rows: New section rows.
 
@@ -176,6 +182,59 @@ class FakeSectionStore:
         """
         self.sections[doc_id] = list(rows)
         return len(rows)
+
+    def upsert_document_and_replace_sections(
+        self,
+        doc_id: str,
+        tenant_id: str,
+        title: str | None,
+        domain: str | None,
+        total_pages: int,
+        content_hash_value: str | None,
+        ingest_status: str,
+        fallback_only: bool,
+        rows: list[SectionRow],
+        residency_region: str = "GLOBAL",
+    ) -> int:
+        """Fake implementation: upsert the document metadata and replace all sections atomically.
+
+        Args:
+            doc_id: Document primary key.
+            tenant_id: Owning tenant.
+            title: Optional title.
+            domain: Optional domain.
+            total_pages: Page count.
+            content_hash_value: Content hash (None in no-retention mode).
+            ingest_status: Ingest status enum value.
+            fallback_only: True when no structure was detected (Scenario C).
+            rows: New section rows to persist.
+            residency_region: DPDP data-residency region; defaults to GLOBAL.
+
+        Returns:
+            Number of section rows written.
+        """
+        self.upsert_document(
+            doc_id=doc_id,
+            tenant_id=tenant_id,
+            title=title,
+            domain=domain,
+            total_pages=total_pages,
+            content_hash_value=content_hash_value,
+            ingest_status=ingest_status,
+            fallback_only=fallback_only,
+        )
+        return self.replace_sections(tenant_id, doc_id, rows)
+
+    def update_residency_region(self, doc_id: str, tenant_id: str, residency_region: str) -> None:
+        """Update the stored residency_region for a document (in-memory no-op variant).
+
+        Args:
+            doc_id: Document primary key.
+            tenant_id: Owning tenant (IDOR guard; unused in the fake).
+            residency_region: One of IN, EU, US, GLOBAL.
+        """
+        if doc_id in self.documents:
+            self.documents[doc_id]["residency_region"] = residency_region
 
 
 @dataclass

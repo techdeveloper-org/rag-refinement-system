@@ -405,6 +405,11 @@ class _StubSectionStore:
         self.hash_lookups += 1
         return self._existing
 
+    def update_residency_region(
+        self, doc_id: str, tenant_id: str, residency_region: str
+    ) -> None:
+        """No-op residency update for the test stub."""
+
 
 class TestPipelineIngestor:
     """PipelineIngestor maps the pipeline dict onto IngestOutcome."""
@@ -425,6 +430,7 @@ class TestPipelineIngestor:
                 "section_rows_written": 2,
                 "chunks_upserted": 8,
                 "fallback_only": False,
+                "total_pages": 12,
             }
 
         ingestor = PipelineIngestor(
@@ -466,6 +472,7 @@ class TestPipelineIngestor:
                 "section_rows_written": 1,
                 "chunks_upserted": 1,
                 "fallback_only": False,
+                "pre_existing": True,
             }
 
         ingestor = PipelineIngestor(
@@ -693,7 +700,7 @@ class TestGenerationAdapter:
 
         assert tokens == ["Hello", " world"]
         assert client.messages.calls[0]["model"] == adapter._model
-        assert client.messages.calls[0]["thinking"] == {"type": "adaptive"}
+        assert client.messages.calls[0]["thinking"] == {"type": "enabled", "budget_tokens": 5000}
 
     async def test_missing_package_maps_to_dependency_unavailable(self) -> None:
         """A missing anthropic package surfaces as DependencyUnavailable."""

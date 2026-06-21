@@ -134,6 +134,7 @@ def test_list_documents_paginated(
     body = response.json()
     assert body["pagination"]["page"] == 1
     assert body["pagination"]["total_count"] == 1
+    assert body["data"], "Expected at least one document in response"
     assert all(doc["doc_id"] == "doc_abc123" for doc in body["data"])
 
 
@@ -231,7 +232,7 @@ def test_export_data_returns_pii_field_metadata_only(
 
     for entry in body["pii_fields"]:
         assert entry["field"] in {"title", "summary"}
-        assert "Warranty" not in entry["field"]
+        assert "Warranty" not in str(entry.get("value", ""))
 
 
 def test_export_data_scoped_to_tenant(client: TestClient) -> None:

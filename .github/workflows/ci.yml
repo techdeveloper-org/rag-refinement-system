@@ -62,7 +62,7 @@ jobs:
       - name: Install security tooling
         run: pip install ".[dev]"
       - name: Bandit SAST (blocking)
-        run: bandit -r backend ingestion router db
+        run: bandit -c pyproject.toml -r backend ingestion router db
       - name: pip-audit SCA (blocking)
         run: pip-audit
       - name: detect-secrets scan (blocking)
@@ -78,7 +78,7 @@ jobs:
           import sys
 
           def _key(path, secret):
-              return (path, secret["line_number"], secret["type"])
+              return (path, secret["line_number"], secret["type"], secret["hashed_secret"])
 
           with open(".secrets.baseline", encoding="utf-8") as f:
               baseline = json.load(f)

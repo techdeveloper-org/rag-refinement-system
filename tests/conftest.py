@@ -63,7 +63,7 @@ def _doc(doc_id: str, tenant_id: str, *, total_pages: int = 10, title: str = "T"
         domain="legal",
         residency_region="IN",
         fallback_only=False,
-        created_at=_dt.datetime(2026, 6, 6, tzinfo=_dt.timezone.utc).isoformat(),
+        created_at=_dt.datetime(2026, 6, 6, tzinfo=_dt.UTC).isoformat(),
         pii_flags={},
     )
 
@@ -262,6 +262,8 @@ def _configure_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     yield
     get_settings.cache_clear()
     auth_module._api_key_store = None
+    import backend.app.security.rate_limit as _rl_module
+    _rl_module._rate_limiter = None
 
 
 @pytest.fixture

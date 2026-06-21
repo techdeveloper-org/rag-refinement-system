@@ -18,11 +18,12 @@ from __future__ import annotations
 from typing import Any
 
 from db.models import Document, Section
-from sqlalchemy import create_engine, delete, select
+from sqlalchemy import create_engine, delete, insert, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
 from backend.app.api.interfaces import DependencyUnavailable
+from backend.app.errors import ProblemException
 from ingestion.pipeline import SectionRow
 
 
@@ -112,13 +113,20 @@ class SqlAlchemySectionStore:
                 if row is None:
                     row = Document(doc_id=doc_id, tenant_id=tenant_id)
                     session.add(row)
+                if row.tombstoned_at is not None:
+                    raise ProblemException(
+                        status_code=409,
+                        code="DOCUMENT_CONFLICT",
+                        title="Conflict",
+                        detail=f"Cannot resurrect tombstoned document doc_id={doc_id!r}",
+                        problem_type="document-conflict",
+                    )
                 row.title = title
                 row.domain = domain
                 row.total_pages = total_pages
                 row.content_hash = content_hash_value
                 row.ingest_status = ingest_status
                 row.fallback_only = fallback_only
-                row.tombstoned_at = None
                 row.residency_region = residency_region
         except SQLAlchemyError as exc:
             raise DependencyUnavailable("structure store unreachable") from exc
@@ -153,20 +161,23 @@ class SqlAlchemySectionStore:
                         Section.tenant_id == tenant_id,
                     )
                 )
-                for row in rows:
-                    session.add(
-                        Section(
-                            section_id=row.section_id,
-                            doc_id=row.doc_id,
-                            tenant_id=row.tenant_id,
-                            title=row.title,
-                            level=row.level,
-                            page_start=row.page_start,
-                            page_end=row.page_end,
-                            summary=None,
-                            pii_flags={},
-                        )
-                    )
+                session.execute(
+                    insert(Section),
+                    [
+                        {
+                            "section_id": row.section_id,
+                            "doc_id": row.doc_id,
+                            "tenant_id": row.tenant_id,
+                            "title": row.title,
+                            "level": row.level,
+                            "page_start": row.page_start,
+                            "page_end": row.page_end,
+                            "summary": None,
+                            "pii_flags": {},
+                        }
+                        for row in rows
+                    ],
+                )
                 return len(rows)
         except SQLAlchemyError as exc:
             raise DependencyUnavailable("structure store unreachable") from exc
@@ -218,36 +229,45 @@ class SqlAlchemySectionStore:
                 if doc_row is None:
                     doc_row = Document(doc_id=doc_id, tenant_id=tenant_id)
                     session.add(doc_row)
+                if doc_row.tombstoned_at is not None:
+                    raise ProblemException(
+                        status_code=409,
+                        code="DOCUMENT_CONFLICT",
+                        title="Conflict",
+                        detail=f"Cannot resurrect tombstoned document doc_id={doc_id!r}",
+                        problem_type="document-conflict",
+                    )
                 doc_row.title = title
                 doc_row.domain = domain
                 doc_row.total_pages = total_pages
                 doc_row.content_hash = content_hash_value
                 doc_row.ingest_status = ingest_status
                 doc_row.fallback_only = fallback_only
-                doc_row.tombstoned_at = None
                 doc_row.residency_region = residency_region
 
-                # DELETE always runs here: for fallback_only docs rows is intentionally
-                # empty, and we still want to clear any stale sections from a prior run.
                 session.execute(
                     delete(Section).where(
                         Section.doc_id == doc_id,
                         Section.tenant_id == tenant_id,
                     )
                 )
-                for row in rows:
-                    session.add(
-                        Section(
-                            section_id=row.section_id,
-                            doc_id=row.doc_id,
-                            tenant_id=row.tenant_id,
-                            title=row.title,
-                            level=row.level,
-                            page_start=row.page_start,
-                            page_end=row.page_end,
-                            summary=None,
-                            pii_flags={},
-                        )
+                if rows:
+                    session.execute(
+                        insert(Section),
+                        [
+                            {
+                                "section_id": row.section_id,
+                                "doc_id": row.doc_id,
+                                "tenant_id": row.tenant_id,
+                                "title": row.title,
+                                "level": row.level,
+                                "page_start": row.page_start,
+                                "page_end": row.page_end,
+                                "summary": None,
+                                "pii_flags": {},
+                            }
+                            for row in rows
+                        ],
                     )
                 return len(rows)
         except SQLAlchemyError as exc:

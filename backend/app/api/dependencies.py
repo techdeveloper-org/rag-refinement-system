@@ -25,8 +25,7 @@ from backend.app.api.interfaces import (
 from backend.app.errors import service_unavailable
 from backend.app.settings import get_settings
 
-
-_document_store_cache: object | None = None
+_document_store_cache: DocumentStore | None = None
 _document_store_lock = __import__("threading").Lock()
 
 
@@ -40,18 +39,17 @@ def _document_store_singleton() -> DocumentStore:
         ProblemException: 503 when DATABASE_URL is not configured.
     """
     global _document_store_cache
-    if _document_store_cache is None:
-        with _document_store_lock:
-            if _document_store_cache is None:
-                from backend.app.adapters.document_store import SqlAlchemyDocumentStore
-                settings = get_settings()
-                if not settings.database_url:
-                    raise service_unavailable("The document store is not configured.")
-                _document_store_cache = SqlAlchemyDocumentStore.from_database_url(settings.database_url)
+    with _document_store_lock:
+        if _document_store_cache is None:
+            from backend.app.adapters.document_store import SqlAlchemyDocumentStore
+            settings = get_settings()
+            if not settings.database_url:
+                raise service_unavailable("The document store is not configured.")
+            _document_store_cache = SqlAlchemyDocumentStore.from_database_url(settings.database_url)
     return _document_store_cache
 
 
-_router_cache: object | None = None
+_router_cache: Router | None = None
 _router_lock = __import__("threading").Lock()
 
 
@@ -62,18 +60,17 @@ def _router_singleton() -> Router:
         A live RouterModuleAdapter joined to the document store.
     """
     global _router_cache
-    if _router_cache is None:
-        with _router_lock:
-            if _router_cache is None:
-                from router import route as router_route
+    with _router_lock:
+        if _router_cache is None:
+            from router import route as router_route
 
-                from backend.app.adapters.router import RouterModuleAdapter
+            from backend.app.adapters.router import RouterModuleAdapter
 
-                _router_cache = RouterModuleAdapter(_document_store_singleton(), router_route)
+            _router_cache = RouterModuleAdapter(_document_store_singleton(), router_route)
     return _router_cache
 
 
-_ingestor_cache: object | None = None
+_ingestor_cache: Ingestor | None = None
 _ingestor_lock = __import__("threading").Lock()
 
 
@@ -89,34 +86,33 @@ def _ingestor_singleton() -> Ingestor:
             DATABASE_URL is configured.
     """
     global _ingestor_cache
-    if _ingestor_cache is None:
-        with _ingestor_lock:
-            if _ingestor_cache is None:
-                from backend.app.adapters.ingestor import PipelineIngestor
-                from backend.app.adapters.stores import QdrantVectorStore, SqlAlchemySectionStore
-                from ingestion.embedder import BgeM3Embedder, FallbackEmbedder, OpenAIEmbedder
-                from ingestion.parser import PyMuPDFParser
-                from ingestion.pipeline import ingest_document
+    with _ingestor_lock:
+        if _ingestor_cache is None:
+            from backend.app.adapters.ingestor import PipelineIngestor
+            from backend.app.adapters.stores import QdrantVectorStore, SqlAlchemySectionStore
+            from ingestion.embedder import BgeM3Embedder, FallbackEmbedder, OpenAIEmbedder
+            from ingestion.parser import PyMuPDFParser
+            from ingestion.pipeline import ingest_document
 
-                settings = get_settings()
-                sync_url = settings.database_sync_url
-                if not sync_url and settings.database_url:
-                    from sqlalchemy.engine.url import make_url as _make_url
-                    _parsed = _make_url(settings.database_url)
-                    sync_url = str(_parsed.set(drivername="postgresql+psycopg"))
-                if not sync_url:
-                    raise service_unavailable("The ingestion section store is not configured.")
-                _ingestor_cache = PipelineIngestor(
-                    parser=PyMuPDFParser(),
-                    embedder=FallbackEmbedder(OpenAIEmbedder(), BgeM3Embedder()),
-                    section_store=SqlAlchemySectionStore.from_database_url(sync_url),
-                    vector_store=QdrantVectorStore(),
-                    ingest=ingest_document,
-                )
+            settings = get_settings()
+            sync_url = settings.database_sync_url
+            if not sync_url and settings.database_url:
+                from sqlalchemy.engine.url import make_url as _make_url
+                _parsed = _make_url(settings.database_url)
+                sync_url = str(_parsed.set(drivername="postgresql+psycopg"))
+            if not sync_url:
+                raise service_unavailable("The ingestion section store is not configured.")
+            _ingestor_cache = PipelineIngestor(
+                parser=PyMuPDFParser(),
+                embedder=FallbackEmbedder(OpenAIEmbedder(), BgeM3Embedder()),
+                section_store=SqlAlchemySectionStore.from_database_url(sync_url),
+                vector_store=QdrantVectorStore(),
+                ingest=ingest_document,
+            )
     return _ingestor_cache
 
 
-_generation_llm_cache: object | None = None
+_generation_llm_cache: GenerationLLM | None = None
 _generation_llm_lock = __import__("threading").Lock()
 
 
@@ -127,17 +123,16 @@ def _generation_llm_singleton() -> GenerationLLM:
         A live ClaudeGenerationLLM; its client is built on first stream.
     """
     global _generation_llm_cache
-    if _generation_llm_cache is None:
-        with _generation_llm_lock:
-            if _generation_llm_cache is None:
-                from backend.app.adapters.generation import ClaudeGenerationLLM
-                from backend.app.settings import get_settings
+    with _generation_llm_lock:
+        if _generation_llm_cache is None:
+            from backend.app.adapters.generation import ClaudeGenerationLLM
+            from backend.app.settings import get_settings
 
-                settings = get_settings()
-                _generation_llm_cache = ClaudeGenerationLLM(
-                    thinking_budget_tokens=settings.generation_thinking_budget_tokens
-                )
-    return _generation_llm_cache
+            settings = get_settings()
+            _generation_llm_cache = ClaudeGenerationLLM(  # type: ignore[assignment]
+                thinking_budget_tokens=settings.generation_thinking_budget_tokens
+            )
+    return _generation_llm_cache  # type: ignore[return-value]
 
 
 def get_document_store() -> DocumentStore:

@@ -20,16 +20,16 @@ from backend.app.errors import ProblemException
 def _reset_singletons(monkeypatch: pytest.MonkeyPatch) -> None:
     """Clear all cached provider singletons and settings around each test."""
     settings_module.get_settings.cache_clear()
-    deps._document_store_singleton.cache_clear()
-    deps._router_singleton.cache_clear()
-    deps._ingestor_singleton.cache_clear()
-    deps._generation_llm_singleton.cache_clear()
+    monkeypatch.setattr(deps, "_document_store_cache", None)
+    monkeypatch.setattr(deps, "_router_cache", None)
+    monkeypatch.setattr(deps, "_ingestor_cache", None)
+    monkeypatch.setattr(deps, "_generation_llm_cache", None)
     yield
     settings_module.get_settings.cache_clear()
-    deps._document_store_singleton.cache_clear()
-    deps._router_singleton.cache_clear()
-    deps._ingestor_singleton.cache_clear()
-    deps._generation_llm_singleton.cache_clear()
+    monkeypatch.setattr(deps, "_document_store_cache", None)
+    monkeypatch.setattr(deps, "_router_cache", None)
+    monkeypatch.setattr(deps, "_ingestor_cache", None)
+    monkeypatch.setattr(deps, "_generation_llm_cache", None)
 
 
 def test_document_store_unconfigured_raises_503(
@@ -69,6 +69,7 @@ def test_ingestor_provider_builds_singleton(
 ) -> None:
     """The ingestor provider builds a cached pipeline-backed adapter."""
     monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://u:p@localhost/db")
+    monkeypatch.setenv("DATABASE_SYNC_URL", "sqlite:///:memory:")
     monkeypatch.setenv("QDRANT_URL", "http://localhost:6333")
     first = deps.get_ingestor()
     second = deps.get_ingestor()

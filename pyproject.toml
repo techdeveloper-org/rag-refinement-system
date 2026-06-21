@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "TOC-routed retrieval layer: scope-before-search RAG refinement backend."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "Proprietary" }
+license = { text = "Apache-2.0" }
 authors = [{ name = "RAG Refinement System Team" }]
 
 dependencies = [
@@ -26,18 +26,27 @@ dependencies = [
     # Transitive via pydantic-settings; floor at >=1.2.2 for the set_key/
     # unset_key symlink file-overwrite fix (CVE-2026-28684).
     "python-dotenv>=1.2.2",
+    # Async task/IO library used by the ingestion adapter to run the
+    # synchronous pipeline off the event loop (anyio.to_thread.run_sync).
+    "anyio>=4.3,<5.0",
+    # SQLAlchemy async engine for the document and section stores.
+    "sqlalchemy[asyncio]>=2.0,<3.0",
+    # asyncpg: async PostgreSQL driver required by SQLAlchemy async engine.
+    "asyncpg>=0.29,<1.0",
+    # Qdrant vector store: embedding search used by the ingestion and retrieval layers.
+    "qdrant-client>=1.9,<2.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "ruff>=0.4,<1.0",
     "mypy>=1.10,<2.0",
-    "pytest>=8.2,<9.0",
+    "pytest>=9.0.3,<10.0",
     "pytest-cov>=5.0,<8.0",
-    "anyio>=4.3,<5.0",
     "bandit>=1.7,<2.0",
     "detect-secrets>=1.5,<2.0",
     "pip-audit>=2.7,<3.0",
+    "aiosqlite>=0.18,<1.0",
 ]
 
 [build-system]
@@ -77,6 +86,7 @@ known-first-party = ["backend", "ingestion"]
 
 [tool.mypy]
 python_version = "3.11"
+explicit_package_bases = true
 warn_unused_configs = true
 warn_redundant_casts = true
 warn_unused_ignores = true

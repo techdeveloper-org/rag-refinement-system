@@ -19,8 +19,6 @@ from __future__ import annotations
 import datetime as _dt
 import logging
 
-_logger = logging.getLogger(__name__)
-
 from db.models import Document, ErasureOutbox, Section
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
@@ -31,6 +29,8 @@ from backend.app.api.interfaces import (
     DocumentRecord,
     SectionRecord,
 )
+
+_logger = logging.getLogger(__name__)
 
 _ERASURE_STORES: tuple[str, ...] = ("qdrant", "object_store", "postgres")
 """Downstream stores a tombstone targets in the OAQ-2 outbox."""
@@ -53,7 +53,7 @@ def _to_document_record(row: Document) -> DocumentRecord:
         domain=row.domain,
         residency_region=row.residency_region,
         fallback_only=row.fallback_only,
-        created_at=row.created_at.isoformat() if row.created_at else "",
+        created_at=row.created_at.isoformat() if row.created_at is not None else "",
         pii_flags=dict(row.pii_flags or {}),
     )
 
@@ -218,6 +218,8 @@ class SqlAlchemyDocumentStore:
                     live_doc_id = (await session.execute(doc_stmt)).scalar_one_or_none()
                     if live_doc_id is None:
                         return []
+            async with self._session_factory() as session:
+                async with session.begin():
                     rows = (await session.execute(section_stmt)).scalars().all()
         except SQLAlchemyError as exc:
             raise DependencyUnavailable("structure store unreachable") from exc
@@ -256,7 +258,7 @@ class SqlAlchemyDocumentStore:
                     row = (await session.execute(stmt)).scalar_one_or_none()
                     if row is None:
                         return False
-                    row.tombstoned_at = _dt.datetime.now(_dt.timezone.utc)
+                    row.tombstoned_at = _dt.datetime.now(_dt.UTC)
                     for store in _ERASURE_STORES:
                         session.add(
                             ErasureOutbox(

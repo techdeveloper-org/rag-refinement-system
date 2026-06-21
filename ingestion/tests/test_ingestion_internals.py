@@ -299,8 +299,8 @@ class TestTocRefiner:
         doc = _doc([page])
 
         class _EmptyRefiner:
-            def refine(self, entries: object) -> list:
-                return []
+            def refine(self, entries: tuple[TocEntry, ...]) -> tuple[TocEntry, ...]:
+                return ()
 
         result = extract_toc(doc, llm_refiner=_EmptyRefiner())
         assert result.scenario == "C"

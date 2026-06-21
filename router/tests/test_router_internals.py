@@ -8,6 +8,8 @@ construction in ``router.route``. No real Anthropic client or key is used.
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from router.schema import (
@@ -219,7 +221,7 @@ class TestTocCacheAndGraph:
 
         real_import = builtins.__import__
 
-        def _blocked_import(name: str, *args: object, **kwargs: object) -> object:
+        def _blocked_import(name: str, *args: Any, **kwargs: Any) -> Any:
             if name.startswith("langgraph"):
                 raise ImportError("langgraph blocked for test")
             return real_import(name, *args, **kwargs)
@@ -259,7 +261,7 @@ class TestTocCacheAndGraph:
             "confidence_threshold": 0.7,
             "max_sections": 3,
         }
-        final = await _run_pipeline_fallback(state, llm)
+        final = await _run_pipeline_fallback(state, llm)  # type: ignore[arg-type]
         assert final["output"].relevant_sections == ["sec_a1"]
 
         graph = RouterGraph(llm)

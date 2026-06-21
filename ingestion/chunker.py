@@ -16,11 +16,14 @@ Qdrant payload is complete. Chunk text is runtime data, never PII in fixtures.
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
 from dataclasses import dataclass
 
 from ingestion.parser import ParsedDocument
 from ingestion.toc_extractor import TocEntry
+
+logger = logging.getLogger(__name__)
 
 MIN_CHUNK_TOKENS: int = 100
 """Soft lower bound on chunk size; a sub-MIN remainder is allowed only as the final
@@ -92,8 +95,16 @@ def _section_page_text(doc: ParsedDocument, entry: TocEntry) -> list[tuple[int, 
     """
     pages: list[tuple[int, str]] = []
     for page in doc.pages:
-        if entry.page_start <= page.number <= entry.page_end and page.text.strip():
-            pages.append((page.number, page.text))
+        if not (entry.page_start <= page.number <= entry.page_end):
+            continue
+        if not page.text.strip():
+            logger.warning(
+                "Page %d in section '%s' has no extractable text (image-only?) — skipping",
+                page.number,
+                getattr(entry, "title", "unknown"),
+            )
+            continue
+        pages.append((page.number, page.text))
     return pages
 
 
@@ -137,8 +148,8 @@ def chunk_section(
     Returns:
         Section-bounded chunks (possibly empty when the section has no text).
     """
-    resolved_section_id = section_id or _chunk_id(
-        doc_id, "section", entry.page_start, entry.page_end, entry.title
+    resolved_section_id = section_id or (
+        "sec_" + _chunk_id(doc_id, "section", entry.page_start, entry.page_end, entry.title)
     )
     page_words: list[tuple[int, str]] = []
     for page_number, page_text in _section_page_text(doc, entry):

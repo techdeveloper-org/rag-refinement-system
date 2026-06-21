@@ -20,7 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 _DOC_ID_PATTERN = r"^doc_[A-Za-z0-9]{6,}$"
 _SECTION_ID_PATTERN = r"^sec_[A-Za-z0-9]{1,}$"
 _QUERY_ID_PATTERN = r"^qry_[A-Za-z0-9]{1,}$"
-_TOKEN_REDUCTION_PATTERN = r"^[0-9]{1,3}%$"  # noqa: S105 - regex, not a secret
+_TOKEN_REDUCTION_PATTERN = r"^[0-9]{1,3}%$"  # noqa: S105  # nosec B105 - regex, not a secret
 
 DocumentId = Annotated[str, Field(pattern=_DOC_ID_PATTERN)]
 SectionId = Annotated[str, Field(pattern=_SECTION_ID_PATTERN)]
@@ -50,6 +50,24 @@ class RouteRequest(_Strict):
     confidence_threshold: Confidence = 0.7
     max_sections: Annotated[int, Field(ge=1, le=20)] = 3
     rerank: bool = False
+
+    @field_validator("document_ids")
+    @classmethod
+    def _document_ids_unique(cls, v: list[str]) -> list[str]:
+        """Reject duplicate entries in document_ids to prevent amplified vector-store queries.
+
+        Args:
+            v: The raw list of document ids.
+
+        Returns:
+            The validated list of document ids.
+
+        Raises:
+            ValueError: When any document id appears more than once.
+        """
+        if len(set(v)) != len(v):
+            raise ValueError("document_ids must be unique")
+        return v
 
     @field_validator("query")
     @classmethod
@@ -100,10 +118,12 @@ class RelevantSection(_Strict):
     confidence: Confidence
 
     @model_validator(mode="after")
-    def _page_range_valid(self) -> "RelevantSection":
+    def _page_range_valid(self) -> RelevantSection:
         """Validate page_start <= page_end."""
         if self.page_start > self.page_end:
-            raise ValueError(f"page_start ({self.page_start}) must be <= page_end ({self.page_end})")
+            raise ValueError(
+                f"page_start ({self.page_start}) must be <= page_end ({self.page_end})"
+            )
         return self
 
 
@@ -196,10 +216,12 @@ class TocEntry(_Strict):
     summary: str | None = None
 
     @model_validator(mode="after")
-    def _page_range_valid(self) -> "TocEntry":
+    def _page_range_valid(self) -> TocEntry:
         """Validate page_start <= page_end."""
         if self.page_start > self.page_end:
-            raise ValueError(f"page_start ({self.page_start}) must be <= page_end ({self.page_end})")
+            raise ValueError(
+                f"page_start ({self.page_start}) must be <= page_end ({self.page_end})"
+            )
         return self
 
 
@@ -231,7 +253,7 @@ class Document(_Strict):
     domain: str | None = None
     residency_region: ResidencyRegion
     fallback_only: bool
-    created_at: str
+    created_at: str | None = None
 
 
 class Pagination(_Strict):

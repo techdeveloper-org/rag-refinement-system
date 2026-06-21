@@ -24,14 +24,14 @@ import logging
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from typing import Any
 
-_logger = logging.getLogger(__name__)
-
 from backend.app.api.interfaces import (
     DocumentStore,
     RoutedSection,
     RouterDecision,
     SectionRecord,
 )
+
+_logger = logging.getLogger(__name__)
 
 RouteCallable = Callable[..., Awaitable[Mapping[str, Any]]]
 """Signature of ``router.route`` (kept injectable for offline tests)."""
@@ -165,6 +165,14 @@ def _routed_sections_from_output(
     """
     relevant = output.get("relevant_sections") or []
     confidences = output.get("confidence") or []
+    if len(relevant) != len(confidences):
+        _logger.warning(
+            "router output length mismatch for doc %r: relevant_sections=%d confidence=%d;"
+            " sections beyond the shorter list will be dropped",
+            doc_id,
+            len(relevant),
+            len(confidences),
+        )
     routed: list[RoutedSection] = []
     for index, section_id in enumerate(relevant):
         record = toc_by_id.get(str(section_id))
@@ -292,14 +300,17 @@ class RouterModuleAdapter:
                     raise exc
             if len(errors) > 1:
                 _route_logger.error(
-                    "multi-document routing: %d/%d documents failed; raising first error, others logged below",
+                    "multi-document routing: %d/%d documents failed"
+                    "; raising first error, others logged below",
                     len(errors),
                     len(document_ids),
                 )
                 for i, exc in enumerate(errors[1:], 1):
-                    _route_logger.error("routing error %d/%d: %s", i, len(errors), exc, exc_info=exc)
+                    _route_logger.error(
+                        "routing error %d/%d: %s", i, len(errors), exc, exc_info=exc
+                    )
             raise errors[0]
-        results = raw
+        results = [r for r in raw if not isinstance(r, BaseException)]
         all_sections: list[RoutedSection] = []
         total_time_ms = 0
         rationales: list[str] = []

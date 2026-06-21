@@ -57,10 +57,10 @@ def test_render_prometheus_exposition_contains_all_kpis() -> None:
 
     assert "rag_token_reduction_ratio 0.55" in body
     assert "rag_answer_accuracy_ratio 0.92" in body
-    assert "rag_routing_latency_ms 200.0" in body
+    assert "rag_routing_latency_ms_sum 200.0" in body
     assert "rag_routing_total 1" in body
     assert "rag_fallback_total 0" in body
-    assert "rag_fallback_rate 0.0" in body
+    assert "rag_routing_latency_ms_count 1" in body
     assert body.endswith("\n")
 
 

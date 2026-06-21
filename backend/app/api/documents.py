@@ -14,7 +14,6 @@ import datetime as _dt
 import math
 import os
 import re
-
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, Path, Query, Response, UploadFile, status
@@ -86,7 +85,7 @@ def _now_iso() -> str:
     Returns:
         The timezone-aware current UTC timestamp.
     """
-    return _dt.datetime.now(_dt.timezone.utc).isoformat()
+    return _dt.datetime.now(_dt.UTC).isoformat()
 
 
 async def _read_capped(file: UploadFile, max_bytes: int) -> bytes:
@@ -133,7 +132,7 @@ def _to_document_schema(record: DocumentRecord) -> Document:
         title=record.title,
         total_pages=record.total_pages,
         domain=record.domain,
-        residency_region=record.residency_region,
+        residency_region=record.residency_region,  # type: ignore[arg-type]
         fallback_only=record.fallback_only,
         created_at=record.created_at,
     )
@@ -213,7 +212,10 @@ async def ingest_document(
 
     try:
         raw_name = file.filename or "upload.pdf"
-        safe_name = re.sub(r"[^A-Za-z0-9._\-]", "_", os.path.basename(raw_name))[:255] or "upload.pdf"
+        safe_name = (
+            re.sub(r"[^A-Za-z0-9._\-]", "_", os.path.basename(raw_name))[:255]
+            or "upload.pdf"
+        )
         outcome = await ingestor.ingest_document(
             tenant_id=principal.tenant_id,
             content=content,
@@ -238,7 +240,7 @@ async def ingest_document(
         title=outcome.title,
         total_pages=outcome.total_pages,
         toc=[_to_toc_entry(section) for section in outcome.toc],
-        ingest_status=outcome.ingest_status,
+        ingest_status=outcome.ingest_status,  # type: ignore[arg-type]
         deduplicated=outcome.deduplicated,
     )
 

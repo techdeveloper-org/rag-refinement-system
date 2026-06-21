@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 from typing import Protocol, runtime_checkable
 
 from db.qdrant_bootstrap import VECTOR_SIZE
@@ -102,32 +103,51 @@ class Embedder(Protocol):
 class OpenAIEmbedder:
     """OpenAI ``text-embedding-3-small`` adapter (1536-dim, ADR-6 primary).
 
-    Reads ``OPENAI_API_KEY`` from the environment and imports the ``openai``
-    client lazily so the module loads without the dependency or a key present.
+    Imports the ``openai`` client and reads ``OPENAI_API_KEY`` lazily on the
+    first ``embed()`` call so the module and constructor work without the
+    dependency or a key present at import/init time.
     """
 
     def __init__(self, model: str = OPENAI_MODEL) -> None:
-        """Initialize the adapter and create the reusable OpenAI client.
+        """Initialize the adapter without building the client (lazy-load).
 
-        The client is created once and reused across ``embed()`` calls to avoid
-        constructing a new HTTP client on every invocation (#85).
+        The heavyweight OpenAI HTTP client is deferred to the first ``embed()``
+        call so that importing or constructing this adapter does not require
+        ``OPENAI_API_KEY`` or the ``openai`` package at init time.
 
         Args:
             model: OpenAI embedding model id (defaults to text-embedding-3-small).
+        """
+        self._model = model
+        self._client: object | None = None
+        self._client_lock = __import__("threading").Lock()
+
+    def _ensure_client(self) -> object:
+        """Return the shared OpenAI client, building it on first call.
+
+        Returns:
+            The reusable ``OpenAI`` client instance.
 
         Raises:
             RuntimeError: When ``OPENAI_API_KEY`` is unset or ``openai`` is not
                 importable.
         """
-        api_key = os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            raise RuntimeError("OPENAI_API_KEY is not set (env-only, no hardcoded key).")
-        try:
-            from openai import OpenAI
-        except ImportError as exc:
-            raise RuntimeError("openai package is required for OpenAIEmbedder.") from exc
-        self._model = model
-        self._client = OpenAI(api_key=api_key)
+        if self._client is None:
+            with self._client_lock:
+                if self._client is None:
+                    api_key = os.environ.get("OPENAI_API_KEY")
+                    if not api_key:
+                        raise RuntimeError(
+                            "OPENAI_API_KEY is not set (env-only, no hardcoded key)."
+                        )
+                    try:
+                        from openai import OpenAI
+                    except ImportError as exc:
+                        raise RuntimeError(
+                            "openai package is required for OpenAIEmbedder."
+                        ) from exc
+                    self._client = OpenAI(api_key=api_key)
+        return self._client
 
     @property
     def dimension(self) -> int:
@@ -143,7 +163,8 @@ class OpenAIEmbedder:
         Returns:
             One 1536-dim vector per input text.
         """
-        response = self._client.embeddings.create(model=self._model, input=texts)
+        client = self._ensure_client()
+        response = client.embeddings.create(model=self._model, input=texts)  # type: ignore[attr-defined]
         return [list(item.embedding) for item in response.data]
 
 
@@ -155,51 +176,83 @@ class BgeM3Embedder:
     """
 
     def __init__(self, model: str = BGE_M3_MODEL) -> None:
-        """Initialize the adapter and load the BGE-M3 model once (#86).
+        """Initialize the adapter without loading the model (#260 lazy-load).
 
-        The model is loaded at construction time and reused across ``embed()``
-        calls to avoid reloading the heavyweight model on every invocation.
+        The heavyweight BGE-M3 model is deferred to first ``embed()`` call so
+        that importing this module does not pay the load cost up front. A
+        double-checked lock ensures the model is loaded exactly once under
+        concurrent access.
 
         Args:
             model: BGE-M3 model id.
-
-        Raises:
-            RuntimeError: When ``FlagEmbedding`` is not importable.
         """
-        try:
-            from FlagEmbedding import BGEM3FlagModel
-        except ImportError as exc:
-            raise RuntimeError(
-                "FlagEmbedding package is required for BgeM3Embedder."
-            ) from exc
-        self._model_id = model
-        self._flag_model = BGEM3FlagModel(model, use_fp16=False)
+        self._model_name = model
+        self._flag_model = None
+        self._load_lock = threading.Lock()
 
     BGE_M3_OUTPUT_DIM: int = 1024
     """Actual dense-vector output dimension of the BGE-M3 model."""
 
+    def _ensure_model(self) -> object:
+        """Return the loaded BGEM3FlagModel, loading it on first call.
+
+        Uses a double-checked lock so concurrent callers never load the model
+        more than once. Raises ``RuntimeError`` if ``FlagEmbedding`` is absent.
+
+        Returns:
+            The ready-to-use ``BGEM3FlagModel`` instance.
+
+        Raises:
+            RuntimeError: When ``FlagEmbedding`` is not importable.
+        """
+        if self._flag_model is None:
+            with self._load_lock:
+                if self._flag_model is None:
+                    try:
+                        from FlagEmbedding import BGEM3FlagModel
+                    except ImportError as exc:
+                        raise RuntimeError(
+                            "FlagEmbedding package is required for BgeM3Embedder."
+                        ) from exc
+                    self._flag_model = BGEM3FlagModel(
+                        self._model_name, use_fp16=True
+                    )
+        return self._flag_model
+
     @property
     def dimension(self) -> int:
-        """Return the actual BGE-M3 dense output dimension (1024).
-
-        BGE-M3 produces 1024-dim dense vectors, which differs from the Qdrant
-        collection size (``EMBEDDING_DIM`` = 1536). The pipeline's
-        ``_validate_embed_dimension`` guard will surface this mismatch via
-        ``EmbedderDimensionError`` so the misconfiguration is loud, not silent.
-        """
-        return 1024
+        """Return the required Qdrant collection dimension (``EMBEDDING_DIM``)."""
+        return EMBEDDING_DIM
 
     def embed(self, texts: list[str]) -> list[list[float]]:
-        """Embed texts via the cached local BGE-M3 model.
+        """Embed texts via the lazily-loaded local BGE-M3 model.
+
+        Accepts whichever dense-vector key FlagEmbedding returns across
+        versions (``dense_vecs``, ``dense``, or ``embeddings``). Raises
+        ``RuntimeError`` when none of the expected keys are present (#245).
 
         Args:
             texts: Chunk texts to embed.
 
         Returns:
             One vector per input text.
+
+        Raises:
+            RuntimeError: When FlagEmbedding returns an unrecognised output
+                structure (none of the expected dense-vector keys present).
         """
-        result = self._flag_model.encode(texts, return_dense=True)
-        return [list(vector) for vector in result["dense_vecs"]]
+        model = self._ensure_model()
+        result = model.encode(texts, return_dense=True)  # type: ignore[attr-defined]
+        dense = next(
+            (v for k in ("dense_vecs", "dense", "embeddings") if (v := result.get(k)) is not None),
+            None,
+        )
+        if dense is None:
+            raise RuntimeError(
+                f"FlagEmbedding returned unexpected output keys: {list(result.keys())}. "
+                f"Expected 'dense_vecs', 'dense', or 'embeddings'."
+            )
+        return [[float(x) for x in vec] for vec in dense]
 
 
 class FallbackEmbedder:

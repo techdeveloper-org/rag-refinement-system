@@ -24,6 +24,7 @@ from backend.app.settings import get_settings
 from tests.conftest import (
     API_KEY_SALT,
     JWT_AUDIENCE,
+    JWT_ISSUER,
     JWT_SECRET,
     TENANT_A,
     TENANT_B,
@@ -81,7 +82,7 @@ def test_wrong_audience_jwt_rejected(client: TestClient) -> None:
     """A JWT for a different audience is rejected."""
     import datetime as _dt
 
-    now = _dt.datetime.now(_dt.timezone.utc)
+    now = _dt.datetime.now(_dt.UTC)
     token = jwt.encode(
         {
             "sub": "u",
@@ -200,7 +201,7 @@ def test_jwt_tenant_id_list_returns_401() -> None:
     from backend.app.errors import ProblemException
     from backend.app.security.auth import _resolve_jwt_principal
 
-    now = _dt.datetime.now(_dt.timezone.utc)
+    now = _dt.datetime.now(_dt.UTC)
     token = jwt.encode(
         {
             "sub": "u",
@@ -225,7 +226,7 @@ def test_jwt_tenant_id_int_returns_401() -> None:
     from backend.app.errors import ProblemException
     from backend.app.security.auth import _resolve_jwt_principal
 
-    now = _dt.datetime.now(_dt.timezone.utc)
+    now = _dt.datetime.now(_dt.UTC)
     token = jwt.encode(
         {
             "sub": "u",
@@ -250,7 +251,7 @@ def test_jwt_tenant_id_whitespace_only_returns_401() -> None:
     from backend.app.errors import ProblemException
     from backend.app.security.auth import _resolve_jwt_principal
 
-    now = _dt.datetime.now(_dt.timezone.utc)
+    now = _dt.datetime.now(_dt.UTC)
     token = jwt.encode(
         {
             "sub": "u",
