@@ -19,11 +19,11 @@ import logging
 from typing import Any
 
 from fastapi import FastAPI, Request, status
-
-_logger = logging.getLogger(__name__)
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
+_logger = logging.getLogger(__name__)
 
 PROBLEM_MEDIA_TYPE = "application/problem+json"
 _PROBLEM_BASE_URI = "https://api.rag-refinement.example.com/problems/"

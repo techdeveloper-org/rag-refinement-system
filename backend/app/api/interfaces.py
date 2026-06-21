@@ -18,7 +18,7 @@ The dataclasses mirror the AGREED CONTRACT shapes:
 
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator, AsyncIterator
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 

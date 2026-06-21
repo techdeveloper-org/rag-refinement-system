@@ -24,14 +24,14 @@ import logging
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from typing import Any
 
-_logger = logging.getLogger(__name__)
-
 from backend.app.api.interfaces import (
     DocumentStore,
     RoutedSection,
     RouterDecision,
     SectionRecord,
 )
+
+_logger = logging.getLogger(__name__)
 
 RouteCallable = Callable[..., Awaitable[Mapping[str, Any]]]
 """Signature of ``router.route`` (kept injectable for offline tests)."""
@@ -300,12 +300,15 @@ class RouterModuleAdapter:
                     raise exc
             if len(errors) > 1:
                 _route_logger.error(
-                    "multi-document routing: %d/%d documents failed; raising first error, others logged below",
+                    "multi-document routing: %d/%d documents failed"
+                    "; raising first error, others logged below",
                     len(errors),
                     len(document_ids),
                 )
                 for i, exc in enumerate(errors[1:], 1):
-                    _route_logger.error("routing error %d/%d: %s", i, len(errors), exc, exc_info=exc)
+                    _route_logger.error(
+                        "routing error %d/%d: %s", i, len(errors), exc, exc_info=exc
+                    )
             raise errors[0]
         results = raw
         all_sections: list[RoutedSection] = []

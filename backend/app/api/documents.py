@@ -14,7 +14,6 @@ import datetime as _dt
 import math
 import os
 import re
-
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, Path, Query, Response, UploadFile, status
@@ -86,7 +85,7 @@ def _now_iso() -> str:
     Returns:
         The timezone-aware current UTC timestamp.
     """
-    return _dt.datetime.now(_dt.timezone.utc).isoformat()
+    return _dt.datetime.now(_dt.UTC).isoformat()
 
 
 async def _read_capped(file: UploadFile, max_bytes: int) -> bytes:
@@ -213,7 +212,10 @@ async def ingest_document(
 
     try:
         raw_name = file.filename or "upload.pdf"
-        safe_name = re.sub(r"[^A-Za-z0-9._\-]", "_", os.path.basename(raw_name))[:255] or "upload.pdf"
+        safe_name = (
+            re.sub(r"[^A-Za-z0-9._\-]", "_", os.path.basename(raw_name))[:255]
+            or "upload.pdf"
+        )
         outcome = await ingestor.ingest_document(
             tenant_id=principal.tenant_id,
             content=content,

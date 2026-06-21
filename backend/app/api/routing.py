@@ -16,8 +16,6 @@ import logging
 from fastapi import APIRouter, Depends
 
 from backend.app.api.dependencies import get_document_store, get_router
-
-_logger = logging.getLogger(__name__)
 from backend.app.api.helpers import estimate_token_reduction, new_query_id
 from backend.app.api.interfaces import (
     DependencyUnavailable,
@@ -37,6 +35,8 @@ from backend.app.errors import (
 )
 from backend.app.security.auth import Principal
 from backend.app.security.rate_limit import rate_limit
+
+_logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1", tags=["Routing"])
 

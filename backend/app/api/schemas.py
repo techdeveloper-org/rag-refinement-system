@@ -20,7 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 _DOC_ID_PATTERN = r"^doc_[A-Za-z0-9]{6,}$"
 _SECTION_ID_PATTERN = r"^sec_[A-Za-z0-9]{1,}$"
 _QUERY_ID_PATTERN = r"^qry_[A-Za-z0-9]{1,}$"
-_TOKEN_REDUCTION_PATTERN = r"^[0-9]{1,3}%$"  # noqa: S105 - regex, not a secret
+_TOKEN_REDUCTION_PATTERN = r"^[0-9]{1,3}%$"  # noqa: S105  # nosec B105 - regex, not a secret
 
 DocumentId = Annotated[str, Field(pattern=_DOC_ID_PATTERN)]
 SectionId = Annotated[str, Field(pattern=_SECTION_ID_PATTERN)]
@@ -121,7 +121,9 @@ class RelevantSection(_Strict):
     def _page_range_valid(self) -> "RelevantSection":
         """Validate page_start <= page_end."""
         if self.page_start > self.page_end:
-            raise ValueError(f"page_start ({self.page_start}) must be <= page_end ({self.page_end})")
+            raise ValueError(
+                f"page_start ({self.page_start}) must be <= page_end ({self.page_end})"
+            )
         return self
 
 
@@ -217,7 +219,9 @@ class TocEntry(_Strict):
     def _page_range_valid(self) -> "TocEntry":
         """Validate page_start <= page_end."""
         if self.page_start > self.page_end:
-            raise ValueError(f"page_start ({self.page_start}) must be <= page_end ({self.page_end})")
+            raise ValueError(
+                f"page_start ({self.page_start}) must be <= page_end ({self.page_end})"
+            )
         return self
 
 

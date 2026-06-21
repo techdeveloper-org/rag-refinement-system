@@ -19,8 +19,6 @@ from __future__ import annotations
 import datetime as _dt
 import logging
 
-_logger = logging.getLogger(__name__)
-
 from db.models import Document, ErasureOutbox, Section
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
@@ -31,6 +29,8 @@ from backend.app.api.interfaces import (
     DocumentRecord,
     SectionRecord,
 )
+
+_logger = logging.getLogger(__name__)
 
 _ERASURE_STORES: tuple[str, ...] = ("qdrant", "object_store", "postgres")
 """Downstream stores a tombstone targets in the OAQ-2 outbox."""
@@ -256,7 +256,7 @@ class SqlAlchemyDocumentStore:
                     row = (await session.execute(stmt)).scalar_one_or_none()
                     if row is None:
                         return False
-                    row.tombstoned_at = _dt.datetime.now(_dt.timezone.utc)
+                    row.tombstoned_at = _dt.datetime.now(_dt.UTC)
                     for store in _ERASURE_STORES:
                         session.add(
                             ErasureOutbox(

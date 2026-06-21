@@ -22,11 +22,11 @@ satisfy the backend ``SectionId`` schema pattern.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from typing import Any
 
 import anyio
-import logging
 
 from backend.app.api.interfaces import DependencyUnavailable, IngestOutcome, SectionRecord
 from ingestion import section_id_for
@@ -221,7 +221,7 @@ class PipelineIngestor:
             ) from exc
         except (AssertionError, ValueError, TypeError):
             raise
-        except (ConnectionError, TimeoutError, IOError, OSError) as exc:
+        except OSError as exc:
             _logger.error("Dependency unavailable during ingest: %s", exc, exc_info=True)
             raise DependencyUnavailable("Ingestion pipeline dependency failed") from exc
         except Exception:
@@ -247,7 +247,7 @@ class PipelineIngestor:
                         doc_id_str, tenant_id, residency_region
                     )
                 )
-            except (ConnectionError, TimeoutError, IOError, OSError) as exc:
+            except OSError as exc:
                 _logger.error(
                     "Failed to update residency_region after ingest",
                     extra={
@@ -258,7 +258,8 @@ class PipelineIngestor:
                     exc_info=True,
                 )
                 raise DependencyUnavailable(
-                    f"Residency region update failed for doc {doc_id_str}; DPDP FR-028 compliance at risk."
+                    f"Residency region update failed for doc {doc_id_str};"
+                    " DPDP FR-028 compliance at risk."
                 ) from exc
 
         toc = list(result.get("toc") or [])

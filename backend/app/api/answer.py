@@ -18,8 +18,6 @@ import json
 import logging
 from collections.abc import AsyncIterator
 
-_logger = logging.getLogger(__name__)
-
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
@@ -50,6 +48,8 @@ from backend.app.errors import (
 )
 from backend.app.security.auth import Principal
 from backend.app.security.rate_limit import rate_limit
+
+_logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1", tags=["Answers"])
 
@@ -199,8 +199,13 @@ async def answer_query(
     if document.fallback_only:
         # TODO: product owner to confirm — Option B (whole-document RAG) may replace this
         raise validation_error(
-            detail="This document does not support section-level routing. Use full-document retrieval instead.",
-            errors=[{"field": "document_id", "message": "document does not support section-level routing"}],
+            detail=(
+                "This document does not support section-level routing."
+                " Use full-document retrieval instead."
+            ),
+            errors=[
+                {"field": "document_id", "message": "document does not support section-level routing"}
+            ],
         )
 
     try:
