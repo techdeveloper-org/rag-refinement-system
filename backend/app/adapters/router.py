@@ -310,7 +310,7 @@ class RouterModuleAdapter:
                         "routing error %d/%d: %s", i, len(errors), exc, exc_info=exc
                     )
             raise errors[0]
-        results = raw
+        results = [r for r in raw if not isinstance(r, BaseException)]
         all_sections: list[RoutedSection] = []
         total_time_ms = 0
         rationales: list[str] = []

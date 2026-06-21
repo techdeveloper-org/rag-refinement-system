@@ -225,6 +225,17 @@ class FakeSectionStore:
         )
         return self.replace_sections(tenant_id, doc_id, rows)
 
+    def update_residency_region(self, doc_id: str, tenant_id: str, residency_region: str) -> None:
+        """Update the stored residency_region for a document (in-memory no-op variant).
+
+        Args:
+            doc_id: Document primary key.
+            tenant_id: Owning tenant (IDOR guard; unused in the fake).
+            residency_region: One of IN, EU, US, GLOBAL.
+        """
+        if doc_id in self.documents:
+            self.documents[doc_id]["residency_region"] = residency_region
+
 
 @dataclass
 class FakeVectorStore:

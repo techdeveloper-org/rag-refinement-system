@@ -19,6 +19,7 @@ from backend.app.api.dependencies import get_document_store, get_router
 from backend.app.api.helpers import estimate_token_reduction, new_query_id
 from backend.app.api.interfaces import (
     DependencyUnavailable,
+    DocumentRecord,
     DocumentStore,
     Router,
 )
@@ -94,7 +95,7 @@ async def route_query(
             errors=[{"field": "rerank", "message": "FEATURE_UNAVAILABLE"}],
         )
 
-    async def _fetch_doc(doc_id: str):
+    async def _fetch_doc(doc_id: str) -> DocumentRecord | None:
         try:
             return await store.get_document(principal.tenant_id, doc_id)
         except DependencyUnavailable as exc:

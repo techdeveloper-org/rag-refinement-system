@@ -204,7 +204,10 @@ async def answer_query(
                 " Use full-document retrieval instead."
             ),
             errors=[
-                {"field": "document_id", "message": "document does not support section-level routing"}
+                {
+                    "field": "document_id",
+                    "message": "document does not support section-level routing",
+                }
             ],
         )
 
@@ -223,5 +226,9 @@ async def answer_query(
     return StreamingResponse(
         _answer_stream(query_id, body.query, decision, generator),
         media_type=_SSE_MEDIA_TYPE,
-        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )

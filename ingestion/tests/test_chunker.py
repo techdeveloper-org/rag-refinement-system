@@ -13,10 +13,10 @@ from ingestion.chunker import (
     chunk_section,
 )
 from ingestion.parser import ParsedDocument
-from ingestion.toc_extractor import extract_toc
+from ingestion.toc_extractor import TocEntry, extract_toc
 
 
-def _sections(doc: ParsedDocument) -> list[tuple[str, object]]:
+def _sections(doc: ParsedDocument) -> list[tuple[str, TocEntry]]:
     """Build ``(section_id, entry)`` pairs from a document's TOC.
 
     Args:

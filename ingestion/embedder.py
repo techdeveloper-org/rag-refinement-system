@@ -228,7 +228,7 @@ class BgeM3Embedder:
                 structure (none of the expected dense-vector keys present).
         """
         model = self._ensure_model()
-        result = model.encode(texts, return_dense=True)
+        result = model.encode(texts, return_dense=True)  # type: ignore[attr-defined]
         dense = next(
             (v for k in ("dense_vecs", "dense", "embeddings") if (v := result.get(k)) is not None),
             None,
@@ -238,7 +238,7 @@ class BgeM3Embedder:
                 f"FlagEmbedding returned unexpected output keys: {list(result.keys())}. "
                 f"Expected 'dense_vecs', 'dense', or 'embeddings'."
             )
-        return dense.tolist()
+        return dense.tolist()  # type: ignore[no-any-return]
 
 
 class FallbackEmbedder:

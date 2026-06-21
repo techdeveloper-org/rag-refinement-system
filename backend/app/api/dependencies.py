@@ -26,7 +26,7 @@ from backend.app.errors import service_unavailable
 from backend.app.settings import get_settings
 
 
-_document_store_cache: object | None = None
+_document_store_cache: DocumentStore | None = None
 _document_store_lock = __import__("threading").Lock()
 
 
@@ -50,7 +50,7 @@ def _document_store_singleton() -> DocumentStore:
     return _document_store_cache
 
 
-_router_cache: object | None = None
+_router_cache: Router | None = None
 _router_lock = __import__("threading").Lock()
 
 
@@ -71,7 +71,7 @@ def _router_singleton() -> Router:
     return _router_cache
 
 
-_ingestor_cache: object | None = None
+_ingestor_cache: Ingestor | None = None
 _ingestor_lock = __import__("threading").Lock()
 
 
@@ -113,7 +113,7 @@ def _ingestor_singleton() -> Ingestor:
     return _ingestor_cache
 
 
-_generation_llm_cache: object | None = None
+_generation_llm_cache: GenerationLLM | None = None
 _generation_llm_lock = __import__("threading").Lock()
 
 

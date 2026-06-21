@@ -15,6 +15,7 @@ All tests use ``FakeRouterLLM`` and perform no network access.
 from __future__ import annotations
 
 import json
+from typing import Any
 
 import pytest
 
@@ -33,7 +34,7 @@ def anyio_backend() -> str:
     return "asyncio"
 
 
-async def _route(fake: FakeRouterLLM, toc: list[dict], **kwargs) -> dict:
+async def _route(fake: FakeRouterLLM, toc: list[dict], **kwargs: Any) -> dict:
     """Invoke ``route`` with sensible defaults for tests."""
     params = {
         "tenant_id": "tenant_test",

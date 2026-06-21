@@ -132,7 +132,7 @@ def _to_document_schema(record: DocumentRecord) -> Document:
         title=record.title,
         total_pages=record.total_pages,
         domain=record.domain,
-        residency_region=record.residency_region,
+        residency_region=record.residency_region,  # type: ignore[arg-type]
         fallback_only=record.fallback_only,
         created_at=record.created_at,
     )
@@ -240,7 +240,7 @@ async def ingest_document(
         title=outcome.title,
         total_pages=outcome.total_pages,
         toc=[_to_toc_entry(section) for section in outcome.toc],
-        ingest_status=outcome.ingest_status,
+        ingest_status=outcome.ingest_status,  # type: ignore[arg-type]
         deduplicated=outcome.deduplicated,
     )
 

@@ -239,7 +239,7 @@ def _decode_jwt(token: str, settings: Settings) -> dict[str, object]:
             decode_kwargs["audience"] = settings.jwt_audience
         if settings.jwt_issuer:
             decode_kwargs["issuer"] = settings.jwt_issuer
-        claims = jwt.decode(
+        claims = jwt.decode(  # type: ignore[call-overload]
             token,
             settings.jwt_secret,
             algorithms=[settings.jwt_algorithm],
