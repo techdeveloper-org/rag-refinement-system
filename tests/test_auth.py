@@ -24,6 +24,7 @@ from backend.app.settings import get_settings
 from tests.conftest import (
     API_KEY_SALT,
     JWT_AUDIENCE,
+    JWT_ISSUER,
     JWT_SECRET,
     TENANT_A,
     TENANT_B,

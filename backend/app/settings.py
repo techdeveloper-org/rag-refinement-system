@@ -9,10 +9,11 @@ reflects which dependencies are configured.
 
 from __future__ import annotations
 
+import warnings
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -91,6 +92,21 @@ class Settings(BaseSettings):
     max_upload_bytes: int = Field(
         default=50 * 1024 * 1024, alias="MAX_UPLOAD_BYTES"
     )
+
+    @model_validator(mode="after")
+    def warn_cors_wildcard(self) -> "Settings":
+        """Emit a startup warning when CORS is configured to allow all origins.
+
+        Returns:
+            This settings instance, unchanged.
+        """
+        if "*" in self.cors_allowed_origins:
+            warnings.warn(
+                "CORS is configured to allow all origins ('*'). "
+                "Set CORS_ALLOWED_ORIGINS to restrict access in production.",
+                stacklevel=2,
+            )
+        return self
 
 
 @lru_cache

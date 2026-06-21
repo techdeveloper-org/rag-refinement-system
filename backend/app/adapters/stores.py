@@ -23,6 +23,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
 from backend.app.api.interfaces import DependencyUnavailable
+from backend.app.errors import ProblemException
 from ingestion.pipeline import SectionRow
 
 
@@ -113,8 +114,12 @@ class SqlAlchemySectionStore:
                     row = Document(doc_id=doc_id, tenant_id=tenant_id)
                     session.add(row)
                 if row.tombstoned_at is not None:
-                    raise ValueError(
-                        f"Cannot resurrect tombstoned document doc_id={doc_id!r}"
+                    raise ProblemException(
+                        status_code=409,
+                        code="DOCUMENT_CONFLICT",
+                        title="Conflict",
+                        detail=f"Cannot resurrect tombstoned document doc_id={doc_id!r}",
+                        problem_type="document-conflict",
                     )
                 row.title = title
                 row.domain = domain
@@ -225,8 +230,12 @@ class SqlAlchemySectionStore:
                     doc_row = Document(doc_id=doc_id, tenant_id=tenant_id)
                     session.add(doc_row)
                 if doc_row.tombstoned_at is not None:
-                    raise ValueError(
-                        f"Cannot resurrect tombstoned document doc_id={doc_id!r}"
+                    raise ProblemException(
+                        status_code=409,
+                        code="DOCUMENT_CONFLICT",
+                        title="Conflict",
+                        detail=f"Cannot resurrect tombstoned document doc_id={doc_id!r}",
+                        problem_type="document-conflict",
                     )
                 doc_row.title = title
                 doc_row.domain = domain

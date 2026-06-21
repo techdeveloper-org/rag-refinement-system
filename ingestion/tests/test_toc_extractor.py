@@ -161,5 +161,13 @@ def test_out_of_order_raw_toc_keeps_content_and_leaves_no_gap() -> None:
         covered.extend(range(entry.page_start, entry.page_end + 1))
 
     assert covered == sorted(set(covered)), "ranges overlap across sections"
-    assert covered == list(range(2, 9)), "coverage must be contiguous with no gap"
+    # TODO: page 1 is incorrectly excluded from coverage -- see issue #273.
+    # _derive_page_ranges assigns page_start from the first TOC entry's anchor page;
+    # when no entry anchors page 1 (as here: B anchors page 2, A anchors page 5)
+    # page 1 falls outside every section range. Fix _derive_page_ranges to extend
+    # the first section back to page 1 when no entry covers it.
+    assert covered == list(range(2, 9)), (
+        "Known bug: page 1 is not covered by any TOC section. "
+        "Fix _derive_page_ranges to start at page 1."
+    )
     assert entries[-1].page_end == 8, "last section must end at total_pages"

@@ -33,10 +33,13 @@ are structural metadata (titles + page numbers), never PII.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 from ingestion.parser import ParsedDocument
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -262,16 +265,16 @@ def _detect_headers(doc: ParsedDocument) -> tuple[TocEntry, ...]:
     threshold = body_median * _MIN_HEADER_SIZE_RATIO
     raw: list[tuple[int, str, int]] = []
     for page in doc.pages:
+        if body_median == 0.0:
+            continue
         for block in page.blocks:
-            if body_median == 0.0:
-                break
             is_large = body_median > 0 and block.font_size >= threshold
             is_short_bold = (
                 block.is_bold and body_median > 0 and len(block.text) <= 80
             )
             if is_large or is_short_bold:
                 level = 1 if (body_median > 0 and block.font_size >= body_median * 1.4) else 2
-                raw.append((level, block.text, page.number))
+                raw.append((level, block.text.strip(), page.number))
                 break
     if not raw:
         return ()
@@ -304,6 +307,13 @@ def extract_toc(
     if heuristic:
         if llm_refiner is not None:
             refined = llm_refiner.refine(heuristic)
+            if not refined and heuristic:
+                logger.warning(
+                    "LLM refiner returned empty result for %d heuristic entries — "
+                    "falling back to Scenario C. doc_id=%s",
+                    len(heuristic),
+                    getattr(doc, "doc_id", "unknown"),
+                )
             raw = [(e.level, e.title, e.page_start) for e in refined]
             heuristic = _derive_page_ranges(raw, doc.page_count)
         if heuristic:

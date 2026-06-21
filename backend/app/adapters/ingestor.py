@@ -211,17 +211,26 @@ class PipelineIngestor:
                 title="Embedder misconfiguration",
                 detail=str(exc),
             ) from exc
-        except (AssertionError, ValueError, TypeError) as programming_error:
+        except (AssertionError, ValueError, TypeError):
             raise
-        except Exception as exc:
-            raise DependencyUnavailable("Ingestion pipeline failed; check service logs for details.") from exc
+        except (ConnectionError, TimeoutError, IOError, OSError) as exc:
+            _logger.error("Dependency unavailable during ingest: %s", exc, exc_info=True)
+            raise DependencyUnavailable("Ingestion pipeline dependency failed") from exc
+        except Exception:
+            raise
 
         doc_id_str = str(result["doc_id"])
         try:
             from router.graph import invalidate_toc_cache
             invalidate_toc_cache(doc_id_str)
-        except (ImportError, Exception):
+        except ImportError:
             pass
+        except Exception as exc:
+            _logger.warning(
+                "Failed to invalidate router TOC cache after ingest: %s",
+                exc,
+                exc_info=True,
+            )
 
         if not no_retention and residency_region != "GLOBAL":
             try:

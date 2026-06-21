@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 from typing import Protocol, runtime_checkable
 
 from db.qdrant_bootstrap import VECTOR_SIZE
@@ -155,28 +156,48 @@ class BgeM3Embedder:
     """
 
     def __init__(self, model: str = BGE_M3_MODEL) -> None:
-        """Initialize the adapter and load the BGE-M3 model once (#86).
+        """Initialize the adapter without loading the model (#260 lazy-load).
 
-        The model is loaded at construction time and reused across ``embed()``
-        calls to avoid reloading the heavyweight model on every invocation.
+        The heavyweight BGE-M3 model is deferred to first ``embed()`` call so
+        that importing this module does not pay the load cost up front. A
+        double-checked lock ensures the model is loaded exactly once under
+        concurrent access.
 
         Args:
             model: BGE-M3 model id.
+        """
+        self._model_name = model
+        self._flag_model = None
+        self._load_lock = threading.Lock()
+
+    BGE_M3_OUTPUT_DIM: int = 1024
+    """Actual dense-vector output dimension of the BGE-M3 model."""
+
+    def _ensure_model(self) -> object:
+        """Return the loaded BGEM3FlagModel, loading it on first call.
+
+        Uses a double-checked lock so concurrent callers never load the model
+        more than once. Raises ``RuntimeError`` if ``FlagEmbedding`` is absent.
+
+        Returns:
+            The ready-to-use ``BGEM3FlagModel`` instance.
 
         Raises:
             RuntimeError: When ``FlagEmbedding`` is not importable.
         """
-        try:
-            from FlagEmbedding import BGEM3FlagModel
-        except ImportError as exc:
-            raise RuntimeError(
-                "FlagEmbedding package is required for BgeM3Embedder."
-            ) from exc
-        self._model_id = model
-        self._flag_model = BGEM3FlagModel(model, use_fp16=False)
-
-    BGE_M3_OUTPUT_DIM: int = 1024
-    """Actual dense-vector output dimension of the BGE-M3 model."""
+        if self._flag_model is None:
+            with self._load_lock:
+                if self._flag_model is None:
+                    try:
+                        from FlagEmbedding import BGEM3FlagModel
+                    except ImportError as exc:
+                        raise RuntimeError(
+                            "FlagEmbedding package is required for BgeM3Embedder."
+                        ) from exc
+                    self._flag_model = BGEM3FlagModel(
+                        self._model_name, use_fp16=True
+                    )
+        return self._flag_model
 
     @property
     def dimension(self) -> int:
@@ -190,16 +211,35 @@ class BgeM3Embedder:
         return 1024
 
     def embed(self, texts: list[str]) -> list[list[float]]:
-        """Embed texts via the cached local BGE-M3 model.
+        """Embed texts via the lazily-loaded local BGE-M3 model.
+
+        Accepts whichever dense-vector key FlagEmbedding returns across
+        versions (``dense_vecs``, ``dense``, or ``embeddings``). Raises
+        ``RuntimeError`` when none of the expected keys are present (#245).
 
         Args:
             texts: Chunk texts to embed.
 
         Returns:
             One vector per input text.
+
+        Raises:
+            RuntimeError: When FlagEmbedding returns an unrecognised output
+                structure (none of the expected dense-vector keys present).
         """
-        result = self._flag_model.encode(texts, return_dense=True)
-        return [list(vector) for vector in result["dense_vecs"]]
+        model = self._ensure_model()
+        result = model.encode(texts, return_dense=True)
+        dense = (
+            result.get("dense_vecs")
+            or result.get("dense")
+            or result.get("embeddings")
+        )
+        if dense is None:
+            raise RuntimeError(
+                f"FlagEmbedding returned unexpected output keys: {list(result.keys())}. "
+                f"Expected 'dense_vecs', 'dense', or 'embeddings'."
+            )
+        return list(dense)
 
 
 class FallbackEmbedder:

@@ -59,11 +59,6 @@ class RateLimiter:
         """
         now = self._clock()
         with self._lock:
-            window_start, count = self._windows.get(key, (now, 0))
-            if now - window_start >= _WINDOW_SECONDS:
-                window_start, count = now, 0
-            count += 1
-            self._windows[key] = (window_start, count)
             if len(self._windows) > _MAX_WINDOW_ENTRIES:
                 # Evict oldest half to amortize eviction cost
                 sorted_keys = sorted(self._windows, key=lambda k: self._windows[k][0])
@@ -72,6 +67,11 @@ class RateLimiter:
             expired = [k for k, (ws, _) in self._windows.items() if now - ws >= _WINDOW_SECONDS * 2]
             for k in expired:
                 del self._windows[k]
+            window_start, count = self._windows.get(key, (now, 0))
+            if now - window_start >= _WINDOW_SECONDS:
+                window_start, count = now, 0
+            count += 1
+            self._windows[key] = (window_start, count)
             if count > limit:
                 retry_after = max(1, int(_WINDOW_SECONDS - (now - window_start)))
                 raise rate_limited(retry_after)
