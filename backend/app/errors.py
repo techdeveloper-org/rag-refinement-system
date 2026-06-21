@@ -104,6 +104,13 @@ def unauthorized(
 ) -> ProblemException:
     """Build a 401 UNAUTHORIZED problem.
 
+    The ``WWW-Authenticate: Bearer`` header is included on every 401 response
+    per RFC 6750 §3 so that HTTP clients and API gateways can identify the
+    accepted credential scheme.  This is intentional even when only API-key
+    auth is configured: the header is informational and harmless, and omitting
+    it would require threading settings through every error-raise site (issue
+    #183 — accepted as RFC-compliant behaviour).
+
     Args:
         detail: Occurrence-specific explanation.
 
@@ -344,6 +351,11 @@ async def _handle_http_exception(
 ) -> JSONResponse:
     """Convert Starlette/FastAPI HTTP exceptions into problem documents.
 
+    The mapping covers all common HTTP status codes so that every HTTPException
+    raised by FastAPI (e.g. 405 from route matching, 400 from parameter
+    validation) produces a well-formed RFC-7807 problem type URI instead of
+    the fallback ``problems/error`` slug (issue #220).
+
     Args:
         _request: The incoming request (unused).
         exc: The raised HTTP exception.
@@ -352,14 +364,23 @@ async def _handle_http_exception(
         A problem response mapped from the HTTP status code.
     """
     mapping = {
+        status.HTTP_400_BAD_REQUEST: ("BAD_REQUEST", "Bad Request"),
         status.HTTP_401_UNAUTHORIZED: ("UNAUTHORIZED", "Unauthorized"),
         status.HTTP_403_FORBIDDEN: ("FORBIDDEN", "Forbidden"),
         status.HTTP_404_NOT_FOUND: ("NOT_FOUND", "Not Found"),
         status.HTTP_405_METHOD_NOT_ALLOWED: ("METHOD_NOT_ALLOWED", "Method Not Allowed"),
+        status.HTTP_408_REQUEST_TIMEOUT: ("REQUEST_TIMEOUT", "Request Timeout"),
+        status.HTTP_409_CONFLICT: ("CONFLICT", "Conflict"),
+        status.HTTP_413_REQUEST_ENTITY_TOO_LARGE: ("PAYLOAD_TOO_LARGE", "Payload Too Large"),
         status.HTTP_415_UNSUPPORTED_MEDIA_TYPE: (
             "UNSUPPORTED_MEDIA_TYPE",
             "Unsupported Media Type",
         ),
+        status.HTTP_422_UNPROCESSABLE_ENTITY: ("VALIDATION_ERROR", "Unprocessable Entity"),
+        status.HTTP_429_TOO_MANY_REQUESTS: ("RATE_LIMITED", "Too Many Requests"),
+        status.HTTP_500_INTERNAL_SERVER_ERROR: ("INTERNAL_ERROR", "Internal Server Error"),
+        status.HTTP_502_BAD_GATEWAY: ("BAD_GATEWAY", "Bad Gateway"),
+        status.HTTP_503_SERVICE_UNAVAILABLE: ("SERVICE_UNAVAILABLE", "Service Unavailable"),
     }
     code, title = mapping.get(exc.status_code, ("ERROR", "Error"))
     problem = ProblemException(

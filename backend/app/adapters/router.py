@@ -96,9 +96,12 @@ def _merge_fairly(
             if section.document_id is None
             else section.document_id
         )
-        grouped = by_doc.setdefault(group_key, [])
-        emission_index[id(section)] = len(grouped)
-        grouped.append(section)
+        by_doc.setdefault(group_key, []).append(section)
+
+    for grouped in by_doc.values():
+        grouped.sort(key=lambda s: -s.confidence)
+        for rank, section in enumerate(grouped):
+            emission_index[id(section)] = rank
 
     def _cross_doc_key(section: RoutedSection) -> tuple[float, str, int]:
         """Order tied cross-document sections independent of the request order."""
@@ -109,10 +112,6 @@ def _merge_fairly(
         )
         return (-section.confidence, doc_sort_key, emission_index[id(section)])
 
-    for grouped in by_doc.values():
-        grouped.sort(
-            key=lambda s: (-s.confidence, emission_index[id(s)])
-        )
     representatives = [grouped[0] for grouped in by_doc.values()]
     remainder = [section for grouped in by_doc.values() for section in grouped[1:]]
     representatives.sort(key=_cross_doc_key)
@@ -177,6 +176,11 @@ def _routed_sections_from_output(
     for index, section_id in enumerate(relevant):
         record = toc_by_id.get(str(section_id))
         if record is None:
+            _logger.warning(
+                "Router returned section_id=%r not found in TOC for doc %r; dropping",
+                section_id,
+                doc_id,
+            )
             continue
         if index >= len(confidences):
             continue

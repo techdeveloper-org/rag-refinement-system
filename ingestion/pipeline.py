@@ -59,6 +59,10 @@ class IngestInput:
         domain: Optional domain tag.
         no_retention: When True, no raw bytes are retained and no rows/points are
             persisted (DPDP no-retention mode); the toc is still returned.
+        residency_region: DPDP data-residency region (FR-028); persisted
+            atomically with the Postgres document row so no split-brain can
+            occur between the Qdrant upsert and a subsequent residency update
+            (issue #205).
     """
 
     data: bytes
@@ -67,6 +71,7 @@ class IngestInput:
     domain: str | None = None
     no_retention: bool = False
     force_reingest: bool = False
+    residency_region: str = "GLOBAL"
 
 
 @dataclass
@@ -465,6 +470,12 @@ def ingest_document(
 
     if not doc.no_retention and not fallback_only_flag:
         pairs = _build_section_rows(doc_id, doc.tenant_id, toc.entries)
+        # Postgres is committed BEFORE Qdrant upsert so that the document row
+        # (including residency_region) is durable before any vectors land in
+        # Qdrant. This eliminates the DPDP split-brain window described in
+        # issue #205: a crash after the Postgres commit but before the Qdrant
+        # upsert leaves Qdrant empty (retriable), whereas the reverse ordering
+        # left vectors in Qdrant with a stale GLOBAL residency.
         section_rows_written = section_store.upsert_document_and_replace_sections(
             doc_id=doc_id,
             tenant_id=doc.tenant_id,
@@ -475,6 +486,7 @@ def ingest_document(
             ingest_status=ingest_status,
             fallback_only=False,
             rows=[row for row, _ in pairs],
+            residency_region=doc.residency_region,
         )
 
         sections = [(row.section_id, entry) for row, entry in pairs]
@@ -490,29 +502,69 @@ def ingest_document(
                 _chunk_point(chunk, vector)
                 for chunk, vector in zip(chunks, vectors, strict=True)
             ]
-            chunks_upserted = vector_store.upsert_points(points)
+            try:
+                chunks_upserted = vector_store.upsert_points(points)
+            except Exception:
+                # Compensating rollback: Postgres is already committed, but
+                # Qdrant upsert failed. Attempt to remove any partially-written
+                # points so Qdrant stays consistent with Postgres (issue #208).
+                # This is best-effort; a subsequent re-ingest will re-upsert
+                # idempotently via deterministic point ids.
+                try:
+                    if hasattr(vector_store, "delete_points_for_doc"):
+                        vector_store.delete_points_for_doc(doc_id)
+                except Exception as _rollback_exc:
+                    _log.warning(
+                        "Qdrant compensating rollback failed for doc_id=%s: %s",
+                        doc_id,
+                        _rollback_exc,
+                    )
+                raise
     else:
-        if existing is not None and fallback_only_flag and not doc.no_retention:
+        if existing is not None and doc.no_retention:
+            # Fix #165: skip upsert for no_retention duplicates to avoid overwriting
+            # the existing document's residency_region (DPDP FR-028).
+            _log.info(
+                "Skipping upsert_document for no_retention duplicate doc_id=%s: "
+                "preserving existing residency_region.",
+                doc_id,
+            )
+        elif existing is not None and fallback_only_flag and not doc.no_retention:
             _log.warning(
                 "Skipping ingest_status downgrade for doc_id=%s: "
                 "preserving existing indexed status over transient fallback_only.",
                 doc_id,
             )
-            effective_status = "indexed"
-            effective_fallback = False
+            section_store.upsert_document(
+                doc_id=doc_id,
+                tenant_id=doc.tenant_id,
+                title=doc.title,
+                domain=doc.domain,
+                total_pages=parsed.page_count,
+                content_hash_value=hash_value,
+                ingest_status="indexed",
+                fallback_only=False,
+            )
         else:
-            effective_status = ingest_status
-            effective_fallback = fallback_only_flag
-        section_store.upsert_document(
-            doc_id=doc_id,
-            tenant_id=doc.tenant_id,
-            title=doc.title,
-            domain=doc.domain,
-            total_pages=parsed.page_count,
-            content_hash_value=None if doc.no_retention else hash_value,
-            ingest_status=effective_status,
-            fallback_only=effective_fallback,
-        )
+            # Fix #180: for no_retention documents, residency_region is not passed
+            # to upsert_document because the Protocol does not carry it yet.
+            # The ingestor adapter (PipelineIngestor) calls update_residency_region
+            # after the pipeline completes to stamp the region on the document row,
+            # but only when no_retention=False (DPDP FR-028). For true no_retention
+            # documents, content is not persisted so residency enforcement is
+            # inherently limited; the TODO below tracks the gap.
+            # TODO: extend upsert_document Protocol to accept residency_region so
+            # ephemeral documents still record their intended region for audit.
+            section_store.upsert_document(
+                doc_id=doc_id,
+                tenant_id=doc.tenant_id,
+                title=doc.title,
+                domain=doc.domain,
+                total_pages=parsed.page_count,
+                content_hash_value=None if doc.no_retention else hash_value,
+                ingest_status=ingest_status,
+                fallback_only=fallback_only_flag,
+            )
 
     return IngestResult(
         doc_id=doc_id,

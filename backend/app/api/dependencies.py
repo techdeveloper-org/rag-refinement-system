@@ -12,9 +12,17 @@ lazily on first request rather than at import time.
 The test suite continues to override each provider with a fake via
 ``app.dependency_overrides`` so the HTTP contract is exercised in isolation; the
 fakes satisfy the same Protocols these adapters implement.
+
+All singleton builders share a single ``_singleton_lock`` (issue #222). Using
+separate locks per singleton created a deadlock window: ``_router_singleton``
+held ``_router_lock`` while calling ``_document_store_singleton()``, which
+attempted to acquire ``_document_store_lock``. The single lock eliminates this
+without loss of concurrency, since singletons are only built once on cold start.
 """
 
 from __future__ import annotations
+
+import threading
 
 from backend.app.api.interfaces import (
     DocumentStore,
@@ -25,8 +33,15 @@ from backend.app.api.interfaces import (
 from backend.app.errors import service_unavailable
 from backend.app.settings import get_settings
 
+_singleton_lock = threading.RLock()
+"""Single re-entrant process-wide lock for all singleton builders (issue #222).
+
+An RLock allows the same thread to call nested singleton builders without
+deadlocking (e.g. ``_router_singleton`` calls ``_document_store_singleton``
+while already holding the lock).
+"""
+
 _document_store_cache: DocumentStore | None = None
-_document_store_lock = __import__("threading").Lock()
 
 
 def _document_store_singleton() -> DocumentStore:
@@ -39,7 +54,7 @@ def _document_store_singleton() -> DocumentStore:
         ProblemException: 503 when DATABASE_URL is not configured.
     """
     global _document_store_cache
-    with _document_store_lock:
+    with _singleton_lock:
         if _document_store_cache is None:
             from backend.app.adapters.document_store import SqlAlchemyDocumentStore
             settings = get_settings()
@@ -50,17 +65,21 @@ def _document_store_singleton() -> DocumentStore:
 
 
 _router_cache: Router | None = None
-_router_lock = __import__("threading").Lock()
 
 
 def _router_singleton() -> Router:
     """Build the process-wide router adapter over the live ``router`` package.
 
+    Calls ``_document_store_singleton`` while holding ``_singleton_lock``.
+    Using ``threading.RLock`` prevents the deadlock that would occur with a
+    plain ``Lock`` when the router and document-store singletons are first
+    constructed concurrently (issue #222).
+
     Returns:
         A live RouterModuleAdapter joined to the document store.
     """
     global _router_cache
-    with _router_lock:
+    with _singleton_lock:
         if _router_cache is None:
             from router import route as router_route
 
@@ -71,7 +90,6 @@ def _router_singleton() -> Router:
 
 
 _ingestor_cache: Ingestor | None = None
-_ingestor_lock = __import__("threading").Lock()
 
 
 def _ingestor_singleton() -> Ingestor:
@@ -86,7 +104,7 @@ def _ingestor_singleton() -> Ingestor:
             DATABASE_URL is configured.
     """
     global _ingestor_cache
-    with _ingestor_lock:
+    with _singleton_lock:
         if _ingestor_cache is None:
             from backend.app.adapters.ingestor import PipelineIngestor
             from backend.app.adapters.stores import QdrantVectorStore, SqlAlchemySectionStore
@@ -113,7 +131,6 @@ def _ingestor_singleton() -> Ingestor:
 
 
 _generation_llm_cache: GenerationLLM | None = None
-_generation_llm_lock = __import__("threading").Lock()
 
 
 def _generation_llm_singleton() -> GenerationLLM:
@@ -123,7 +140,7 @@ def _generation_llm_singleton() -> GenerationLLM:
         A live ClaudeGenerationLLM; its client is built on first stream.
     """
     global _generation_llm_cache
-    with _generation_llm_lock:
+    with _singleton_lock:
         if _generation_llm_cache is None:
             from backend.app.adapters.generation import ClaudeGenerationLLM
             from backend.app.settings import get_settings
@@ -169,3 +186,25 @@ def get_generation_llm() -> GenerationLLM:
         A :class:`GenerationLLM` implementation backed by Anthropic Claude.
     """
     return _generation_llm_singleton()
+
+
+async def _dispose_engines() -> None:
+    """Dispose all SQLAlchemy engine connection pools on application shutdown.
+
+    Called by the application lifespan handler so that pooled database
+    connections are cleanly closed before the process exits (issues #157,
+    #203).  Engines that were never initialised (e.g. in tests that do not
+    reach the database) are silently skipped.
+    """
+    global _document_store_cache
+
+    with _singleton_lock:
+        store = _document_store_cache
+
+    if store is not None:
+        try:
+            engine = getattr(store, "_engine", None)
+            if engine is not None:
+                await engine.dispose()
+        except Exception:
+            pass

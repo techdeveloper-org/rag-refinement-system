@@ -18,8 +18,8 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 _DOC_ID_PATTERN = r"^doc_[A-Za-z0-9]{6,}$"
-_SECTION_ID_PATTERN = r"^sec_[A-Za-z0-9]{1,}$"
-_QUERY_ID_PATTERN = r"^qry_[A-Za-z0-9]{1,}$"
+_SECTION_ID_PATTERN = r"^sec_[A-Za-z0-9]{6,}$"
+_QUERY_ID_PATTERN = r"^qry_[A-Za-z0-9_\-]{6,}$"
 _TOKEN_REDUCTION_PATTERN = r"^[0-9]{1,3}%$"  # noqa: S105  # nosec B105 - regex, not a secret
 
 DocumentId = Annotated[str, Field(pattern=_DOC_ID_PATTERN)]
@@ -179,6 +179,23 @@ class Citation(_Strict):
     page_start: Annotated[int, Field(ge=1)]
     page_end: Annotated[int, Field(ge=1)]
 
+    @model_validator(mode="after")
+    def _validate_page_range(self) -> "Citation":
+        """Validate page_start <= page_end.
+
+        Returns:
+            The validated Citation model.
+
+        Raises:
+            ValueError: When page_start exceeds page_end.
+        """
+        if self.page_start is not None and self.page_end is not None:
+            if self.page_start > self.page_end:
+                raise ValueError(
+                    f"page_start ({self.page_start}) must be <= page_end ({self.page_end})"
+                )
+        return self
+
 
 class RoutingSummary(_Strict):
     """The routing projection carried on the SSE final event (RoutingSummary)."""
@@ -250,7 +267,7 @@ class Document(_Strict):
     doc_id: DocumentId
     title: str | None = None
     total_pages: Annotated[int, Field(ge=0)]
-    domain: str | None = None
+    domain: Annotated[str, Field(max_length=100, pattern=r"^[a-zA-Z0-9._-]+$")] | None = None
     residency_region: ResidencyRegion
     fallback_only: bool
     created_at: str | None = None

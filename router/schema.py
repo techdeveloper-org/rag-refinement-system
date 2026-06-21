@@ -41,7 +41,7 @@ class RankedSection(BaseModel):
         confidence: Router confidence in [0.0, 1.0] that the section is relevant.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     section_id: str
     confidence: float = Field(ge=0.0, le=1.0)

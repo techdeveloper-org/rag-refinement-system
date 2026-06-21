@@ -101,7 +101,7 @@ class FakeDocumentStore:
         }
         self._sections: dict[str, list[SectionRecord]] = {
             "doc_abc123": [_section("sec_warranty", TENANT_A)],
-            "doc_other9": [_section("sec_other", TENANT_B)],
+            "doc_other9": [_section("sec_other1", TENANT_B)],
         }
         self.fail_tombstone = False
 
@@ -199,7 +199,7 @@ class FakeIngestor:
             doc_id="doc_new123",
             title=title or "Ingested",
             total_pages=12,
-            toc=[_section("sec_intro", tenant_id)],
+            toc=[_section("sec_intro1", tenant_id)],
             ingest_status="ephemeral" if no_retention else "indexed",
             deduplicated=self.deduplicated,
         )
@@ -252,16 +252,25 @@ def make_jwt(tenant_id: str, subject: str = "user-1", *, expired: bool = False) 
 @pytest.fixture(autouse=True)
 def _configure_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     """Configure auth secrets and reset cached singletons for each test."""
+    import backend.app.api.dependencies as deps
     get_settings.cache_clear()
     monkeypatch.setenv("JWT_SECRET", JWT_SECRET)
     monkeypatch.setenv("JWT_AUDIENCE", JWT_AUDIENCE)
     monkeypatch.setenv("JWT_ISSUER", JWT_ISSUER)
     monkeypatch.setenv("API_KEY_SALT", API_KEY_SALT)
     auth_module._api_key_store = None
+    deps._document_store_cache = None
+    deps._router_cache = None
+    deps._ingestor_cache = None
+    deps._generation_llm_cache = None
     get_rate_limiter().reset()
     yield
     get_settings.cache_clear()
     auth_module._api_key_store = None
+    deps._document_store_cache = None
+    deps._router_cache = None
+    deps._ingestor_cache = None
+    deps._generation_llm_cache = None
     import backend.app.security.rate_limit as _rl_module
     _rl_module._rate_limiter = None
 

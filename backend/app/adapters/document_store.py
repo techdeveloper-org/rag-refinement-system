@@ -19,7 +19,7 @@ from __future__ import annotations
 import datetime as _dt
 import logging
 
-from db.models import Document, ErasureOutbox, Section
+from db.models import ERASURE_STORE_VALUES, Document, ErasureOutbox, Section
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -31,9 +31,6 @@ from backend.app.api.interfaces import (
 )
 
 _logger = logging.getLogger(__name__)
-
-_ERASURE_STORES: tuple[str, ...] = ("qdrant", "object_store", "postgres")
-"""Downstream stores a tombstone targets in the OAQ-2 outbox."""
 
 
 def _to_document_record(row: Document) -> DocumentRecord:
@@ -107,7 +104,15 @@ class SqlAlchemyDocumentStore:
         Returns:
             A store bound to a freshly created async engine/session factory.
         """
-        engine = create_async_engine(database_url, pool_pre_ping=True)
+        engine_kwargs: dict[str, object] = {"pool_pre_ping": True}
+        if not database_url.startswith("sqlite"):
+            engine_kwargs.update(
+                pool_size=3,
+                max_overflow=7,
+                pool_timeout=30,
+                pool_recycle=3600,
+            )
+        engine = create_async_engine(database_url, **engine_kwargs)
         factory = async_sessionmaker(engine, expire_on_commit=False)
         return cls(factory)
 
@@ -259,7 +264,7 @@ class SqlAlchemyDocumentStore:
                     if row is None:
                         return False
                     row.tombstoned_at = _dt.datetime.now(_dt.UTC)
-                    for store in _ERASURE_STORES:
+                    for store in ERASURE_STORE_VALUES:
                         session.add(
                             ErasureOutbox(
                                 doc_id=doc_id,

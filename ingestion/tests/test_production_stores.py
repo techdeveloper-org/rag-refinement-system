@@ -164,6 +164,33 @@ class TestSqlAlchemySectionStore:
             )
         assert len(rows) == 2
 
+    def test_replace_sections_empty_list_is_noop(
+        self, sync_session_factory: sessionmaker[Session]
+    ) -> None:
+        """replace_sections([]) returns 0 and does NOT delete existing sections."""
+        store = SqlAlchemySectionStore(sync_session_factory)
+        store.upsert_document(
+            doc_id="doc_1",
+            tenant_id="tenant_a",
+            title="T",
+            domain=None,
+            total_pages=10,
+            content_hash_value="hash_1",
+            ingest_status="indexed",
+            fallback_only=False,
+        )
+        initial = [_section_row("doc_1", i, "tenant_a") for i in range(3)]
+        store.replace_sections("tenant_a", "doc_1", initial)
+        result = store.replace_sections("tenant_a", "doc_1", [])
+        assert result == 0
+        with sync_session_factory() as session:
+            rows = (
+                session.execute(select(Section).where(Section.doc_id == "doc_1"))
+                .scalars()
+                .all()
+            )
+        assert len(rows) == 3
+
     def test_from_database_url_builds_store(self) -> None:
         """from_database_url builds a store without opening a connection."""
         store = SqlAlchemySectionStore.from_database_url("sqlite:///:memory:")

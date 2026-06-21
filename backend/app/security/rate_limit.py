@@ -28,11 +28,17 @@ _MAX_WINDOW_ENTRIES: int = 50_000
 """Hard cap on tracked rate-limit windows to bound memory under credential-spray attacks."""
 
 
+_CLEANUP_INTERVAL: int = 1000
+"""Number of ``check`` calls between periodic expired-key scans (amortises O(N) cleanup)."""
+
+
 class RateLimiter:
     """Fixed-window per-key rate limiter.
 
     Attributes are guarded by a lock so concurrent requests on the same key
-    increment the counter atomically.
+    increment the counter atomically. Expired-key cleanup runs every
+    ``_CLEANUP_INTERVAL`` calls rather than on every request to amortise the
+    O(N) scan cost across many requests (issue #187).
     """
 
     def __init__(self, clock: Callable[[], float] | None = None) -> None:
@@ -45,6 +51,7 @@ class RateLimiter:
         self._clock = clock or time.monotonic
         self._lock = threading.Lock()
         self._windows: dict[str, tuple[float, int]] = {}
+        self._check_count: int = 0
 
     def check(self, key: str, limit: int) -> None:
         """Record a hit on ``key`` and enforce the per-window ``limit``.
@@ -59,14 +66,20 @@ class RateLimiter:
         """
         now = self._clock()
         with self._lock:
+            self._check_count += 1
             if len(self._windows) > _MAX_WINDOW_ENTRIES:
                 # Evict oldest half to amortize eviction cost
                 sorted_keys = sorted(self._windows, key=lambda k: self._windows[k][0])
                 for k in sorted_keys[: len(sorted_keys) // 2]:
                     del self._windows[k]
-            expired = [k for k, (ws, _) in self._windows.items() if now - ws >= _WINDOW_SECONDS * 2]
-            for k in expired:
-                del self._windows[k]
+            elif self._check_count % _CLEANUP_INTERVAL == 0:
+                # Periodic expired-key cleanup (amortized O(1) per request on average)
+                expired = [
+                    k for k, (ws, _) in self._windows.items()
+                    if now - ws >= _WINDOW_SECONDS * 2
+                ]
+                for k in expired:
+                    del self._windows[k]
             window_start, count = self._windows.get(key, (now, 0))
             if now - window_start >= _WINDOW_SECONDS:
                 window_start, count = now, 0

@@ -117,7 +117,7 @@ async def route_query(
             raise document_not_found(f"Document '{doc_id}' not found.")
         docs.append(result)
 
-    total_pages = sum(d.total_pages for d in docs)
+    total_pages = sum(d.total_pages or 0 for d in docs)
 
     for document in docs:
         if document.fallback_only:
@@ -142,6 +142,24 @@ async def route_query(
                     "Please retry in a few seconds."
                 ),
                 problem_type="document-not-ready",
+            )
+
+    # Fix #179: log restricted residency_region documents at routing time.
+    # TODO: enforce caller-region matching when tenant residency metadata is available
+    # (DPDP FR-028 enforcement at query/routing boundary).
+    for doc in docs:
+        if doc.residency_region not in ("GLOBAL", None):
+            _logger.warning(
+                "Routing query to document with restricted residency_region=%s "
+                "for tenant=%s doc_id=%s; cross-region enforcement is pending.",
+                doc.residency_region,
+                principal.tenant_id,
+                doc.doc_id,
+                extra={
+                    "doc_id": doc.doc_id,
+                    "tenant_id": principal.tenant_id,
+                    "residency_region": doc.residency_region,
+                },
             )
 
     try:

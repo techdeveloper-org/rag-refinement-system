@@ -19,8 +19,13 @@ observe a metric and move on.
 
 from __future__ import annotations
 
+import math
 import threading
 from dataclasses import dataclass, field
+
+# Maximum observations per accumulator before a rolling reset is performed to
+# prevent float-precision degradation over long-running deployments (#190).
+_MAX_OBSERVATIONS = 100_000
 
 
 @dataclass
@@ -37,12 +42,23 @@ class _Accumulator:
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def observe(self, value: float) -> None:
-        """Record one observation.
+        """Record one observation, ignoring non-finite values.
+
+        Non-finite values (NaN, +Inf, -Inf) are silently dropped to prevent
+        permanently poisoning the running average (#210). When the observation
+        count reaches _MAX_OBSERVATIONS the accumulator resets to avoid
+        float-precision loss over long-running deployments (#190).
 
         Args:
-            value: The observed value to add to the running sum.
+            value: The observed value to add to the running sum. Non-finite
+                values are discarded without updating the accumulator.
         """
+        if not math.isfinite(value):
+            return
         with self._lock:
+            if self.count >= _MAX_OBSERVATIONS:
+                self.count = 0
+                self.total = 0.0
             self.count += 1
             self.total += value
 

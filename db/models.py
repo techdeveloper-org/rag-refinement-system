@@ -197,7 +197,7 @@ class ErasureOutbox(Base):
     outbox_id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     doc_id: Mapped[str] = mapped_column(
         Text,
-        ForeignKey("documents.doc_id", ondelete="RESTRICT"),
+        ForeignKey("documents.doc_id", ondelete="CASCADE"),
         nullable=False,
     )
     tenant_id: Mapped[str] = mapped_column(Text, nullable=False)

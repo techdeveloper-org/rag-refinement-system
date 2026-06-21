@@ -23,6 +23,8 @@ import hmac
 import threading
 from dataclasses import dataclass
 
+_RATE_LIMIT_KEY_HASH_LENGTH = 16
+
 import jwt
 from fastapi import Request
 
@@ -56,11 +58,27 @@ class Principal:
     def rate_limit_key(self) -> str:
         """Return the per-credential rate-limit bucket key.
 
+        For JWT principals the ``sub`` claim is caller-controlled; using it
+        verbatim allows a malicious caller to create an unbounded number of
+        rate-limit buckets, bypassing per-credential throttling (issue #175).
+        A truncated SHA-256 digest of the subject collapses the attacker's
+        key space to a fixed 16-hex-character prefix while remaining stable
+        for legitimate callers.
+
+        API-key subjects are already opaque server-assigned identifiers so
+        they are used directly without hashing.
+
         Returns:
-            A key combining the credential kind and subject so an API key and
-            a JWT subject never share a bucket.
+            A key combining the credential kind and a subject token so an
+            API key and a JWT subject never share a bucket.
         """
-        return f"{self.kind.value}:{self.subject}"
+        if self.kind is PrincipalKind.JWT:
+            subject_token = hashlib.sha256(self.subject.encode()).hexdigest()[
+                :_RATE_LIMIT_KEY_HASH_LENGTH
+            ]
+        else:
+            subject_token = self.subject
+        return f"{self.kind.value}:{subject_token}"
 
 
 def hash_api_key(plaintext_key: str, salt: str) -> str:

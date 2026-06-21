@@ -55,15 +55,13 @@ def test_full_context_fraction_makes_entire_spend_addressable() -> None:
     )
 
 
-def test_zero_spend_yields_zero_savings() -> None:
-    report = calculate_roi(current_monthly_spend_usd=0.0)
-
-    assert report.expected.monthly_savings_usd == 0.0
-    assert report.annual_savings_expected_usd == 0.0
+def test_zero_spend_is_rejected() -> None:
+    with pytest.raises(ValueError, match="positive"):
+        calculate_roi(current_monthly_spend_usd=0.0)
 
 
 def test_negative_spend_is_rejected() -> None:
-    with pytest.raises(ValueError, match="non-negative"):
+    with pytest.raises(ValueError, match="positive"):
         calculate_roi(current_monthly_spend_usd=-1.0)
 
 

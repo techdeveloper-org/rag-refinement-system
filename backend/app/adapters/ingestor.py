@@ -192,12 +192,16 @@ class PipelineIngestor:
         Returns:
             An :class:`IngestOutcome` mirroring the openapi IngestResponse.
         """
+        # Pass residency_region into IngestInput so the pipeline persists it
+        # atomically inside the Postgres transaction that runs before Qdrant
+        # upsert, eliminating the DPDP split-brain window (issue #205).
         doc = IngestInput(
             data=content,
             tenant_id=tenant_id,
             title=title,
             domain=domain,
             no_retention=no_retention,
+            residency_region=residency_region,
         )
         try:
             result, deduplicated = await anyio.to_thread.run_sync(self._run_pipeline, doc)
@@ -239,28 +243,6 @@ class PipelineIngestor:
                 exc,
                 exc_info=True,
             )
-
-        if not no_retention and residency_region != "GLOBAL":
-            try:
-                await anyio.to_thread.run_sync(
-                    lambda: self._section_store.update_residency_region(
-                        doc_id_str, tenant_id, residency_region
-                    )
-                )
-            except OSError as exc:
-                _logger.error(
-                    "Failed to update residency_region after ingest",
-                    extra={
-                        "doc_id": doc_id_str,
-                        "tenant_id": tenant_id,
-                        "residency_region": residency_region,
-                    },
-                    exc_info=True,
-                )
-                raise DependencyUnavailable(
-                    f"Residency region update failed for doc {doc_id_str};"
-                    " DPDP FR-028 compliance at risk."
-                ) from exc
 
         toc = list(result.get("toc") or [])
         fallback_only = bool(result.get("fallback_only", False))

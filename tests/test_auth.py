@@ -130,13 +130,11 @@ def test_unknown_apikey_returns_401(client: TestClient) -> None:
     assert response.status_code == 401
 
 
-def test_api_key_is_hashed_at_rest() -> None:
+def test_api_key_is_hashed_at_rest(monkeypatch: pytest.MonkeyPatch) -> None:
     """The store holds only salted digests, never the plaintext key."""
     get_settings.cache_clear()
     auth_module._api_key_store = None
-    import os
-
-    os.environ["API_KEY_SALT"] = API_KEY_SALT
+    monkeypatch.setenv("API_KEY_SALT", API_KEY_SALT)
     store = get_api_key_store()
     store.register("super-secret-key", TENANT_A, "key_1")
     digest = hash_api_key("super-secret-key", API_KEY_SALT)
@@ -147,9 +145,12 @@ def test_api_key_is_hashed_at_rest() -> None:
 
 def test_tenant_id_scoped_into_request() -> None:
     """The resolved principal carries the tenant_id and credential kind."""
+    import hashlib
+
     principal = Principal(tenant_id=TENANT_A, subject="user-1", kind=PrincipalKind.JWT)
     assert principal.tenant_id == TENANT_A
-    assert principal.rate_limit_key == "jwt:user-1"
+    expected_token = hashlib.sha256(b"user-1").hexdigest()[:16]
+    assert principal.rate_limit_key == f"jwt:{expected_token}"
 
 
 def test_authenticated_op_is_rate_limited(

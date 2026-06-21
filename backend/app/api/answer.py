@@ -14,6 +14,7 @@ problem+json response **before** the stream opens.
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 import logging
 from collections.abc import AsyncIterator
@@ -39,6 +40,7 @@ from backend.app.api.schemas import (
     AnswerRequest,
     Citation,
     RoutingSummary,
+    TokenEvent,
 )
 from backend.app.errors import (
     document_not_found,
@@ -127,15 +129,16 @@ async def _answer_stream(
     Yields:
         Wire-format SSE frames.
     """
-    answer_parts: list[str] = []
+    answer_buf = io.StringIO()
     try:
         async for token in generator.stream_answer(query, decision.relevant_sections):
-            answer_parts.append(token)
-            yield _sse_event("token", {"query_id": query_id, "token": token})
+            answer_buf.write(token)
+            token_event = TokenEvent(query_id=query_id, token=token)
+            yield _sse_event("token", token_event.model_dump(exclude_none=True))
 
         final = AnswerFinalEvent(
             query_id=query_id,
-            answer="".join(answer_parts),
+            answer=answer_buf.getvalue(),
             citations=_build_citations(decision),
             routing=_build_routing_summary(decision),
         )
@@ -148,6 +151,10 @@ async def _answer_stream(
         yield _sse_event("error", problem.to_problem())
     except asyncio.CancelledError:
         _logger.info("answer stream cancelled (client disconnect); query_id=%s", query_id)
+        yield _sse_event(
+            "error",
+            {"type": "error", "code": "STREAM_CANCELLED", "detail": "Stream cancelled"},
+        )
         raise
     except Exception:  # noqa: BLE001 - mid-stream failures become an SSE error event
         _logger.exception("unhandled error in answer stream; query_id=%s", query_id)
@@ -187,6 +194,20 @@ async def answer_query(
         ProblemException: 404 when the document is not owned by the caller;
             503 when routing is unreachable (pre-stream).
     """
+    if body.rerank:
+        _logger.warning(
+            "rerank=True on /v1/answer is not yet implemented; proceeding without reranking"
+        )
+
+    # Fix #166: log no_retention so downstream consumers can observe it.
+    # TODO: forward no_retention to routing.route() and generator.stream_answer()
+    # once those interfaces are updated to accept it (DPDP FR-027 enforcement).
+    if body.no_retention:
+        _logger.info(
+            "no_retention=True on /v1/answer; query result must not be persisted",
+            extra={"tenant_id": principal.tenant_id, "document_id": body.document_id},
+        )
+
     try:
         document = await store.get_document(principal.tenant_id, body.document_id)
     except DependencyUnavailable as exc:
@@ -223,12 +244,15 @@ async def answer_query(
         raise service_unavailable(str(exc) or "Routing dependency unavailable.") from exc
 
     query_id = new_query_id()
+    response_headers: dict[str, str] = {
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+    }
+    if body.no_retention:
+        response_headers["X-No-Retention"] = "true"
     return StreamingResponse(
         _answer_stream(query_id, body.query, decision, generator),
         media_type=_SSE_MEDIA_TYPE,
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
+        headers=response_headers,
     )

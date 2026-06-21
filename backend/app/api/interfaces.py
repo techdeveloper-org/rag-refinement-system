@@ -18,7 +18,7 @@ The dataclasses mirror the AGREED CONTRACT shapes:
 
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, AsyncIterator
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
@@ -208,11 +208,11 @@ class Ingestor(Protocol):
 class GenerationLLM(Protocol):
     """Streaming generation interface (ai-engineer-owned; faked in tests)."""
 
-    def stream_answer(
+    async def stream_answer(
         self,
         query: str,
         sections: list[RoutedSection],
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncIterator[str]:
         """Yield answer token fragments for the routed sections."""
         ...
 

@@ -36,7 +36,12 @@ def test_health_returns_200(client: TestClient) -> None:
 def test_ready_returns_503_when_dependency_down(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Readiness must return 503 when a configured dependency is down."""
+    """Readiness must return 503 when a configured dependency is down.
+
+    Sends an API-key header so the dependency breakdown is included in the
+    response (authenticated callers receive the full ``dependencies`` map per
+    the auth-gating logic in ``get_readiness``).
+    """
 
     async def fake_evaluate(settings: Settings) -> health_module.ReadinessStatus:
         return health_module.ReadinessStatus(
@@ -45,7 +50,7 @@ def test_ready_returns_503_when_dependency_down(
         )
 
     monkeypatch.setattr(health_module, "evaluate_readiness", fake_evaluate)
-    response = client.get("/ready")
+    response = client.get("/ready", headers={"X-API-Key": "probe-key"})
     assert response.status_code == 503
     body = response.json()
     assert body["status"] == "degraded"

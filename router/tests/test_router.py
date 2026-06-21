@@ -305,3 +305,115 @@ def test_parse_rejects_oversized_response() -> None:
     """The strict parser rejects pathologically large replies."""
     with pytest.raises(ValueError):
         parse_router_llm_json("{" + "a" * 30000 + "}")
+
+
+class _ErrorRouterLLM:
+    """Fake RouterLLM whose complete() always raises RuntimeError."""
+
+    def __init__(self) -> None:
+        """Initialize the error fake."""
+        self.call_count = 0
+
+    async def complete(self, system: str, messages: list[dict[str, str]]) -> str:
+        """Raise unconditionally to simulate an LLM failure.
+
+        Args:
+            system: Ignored system prompt.
+            messages: Ignored messages.
+
+        Returns:
+            Never returns; always raises.
+
+        Raises:
+            RuntimeError: Always raised to simulate an LLM error.
+        """
+        self.call_count += 1
+        raise RuntimeError("Simulated LLM backend failure")
+
+
+async def test_llm_error_during_route_triggers_fallback(golden_toc: list[dict]) -> None:
+    """An exception from llm.complete() during _node_route triggers deterministic fallback."""
+    error_llm = _ErrorRouterLLM()
+    result = await route(
+        "How long is the warranty?",
+        "doc_abc123",
+        golden_toc,
+        tenant_id="tenant_test",
+        llm=error_llm,  # type: ignore[arg-type]
+        confidence_threshold=0.7,
+        max_sections=3,
+    )
+    assert result["fallback"] is True
+    assert result["relevant_sections"] == []
+    assert result["rationale"]
+    assert error_llm.call_count == 1
+
+
+async def test_empty_toc_short_circuits_without_llm_call() -> None:
+    """route() with an empty TOC returns fallback immediately without calling the LLM."""
+    fake = FakeRouterLLM(make_reply([{"section_id": "sec_warranty", "confidence": 0.95}]))
+    result = await route(
+        "How long is the warranty?",
+        "doc_abc123",
+        [],
+        tenant_id="tenant_test",
+        llm=fake,
+        confidence_threshold=0.7,
+        max_sections=3,
+    )
+    assert result["fallback"] is True
+    assert result["relevant_sections"] == []
+    assert fake.call_count == 0
+
+
+async def test_concurrent_route_calls_are_independent(golden_toc: list[dict]) -> None:
+    """Two concurrent route() tasks on the same doc_id each complete independently."""
+    import asyncio
+
+    fake_a = FakeRouterLLM(make_reply([{"section_id": "sec_warranty", "confidence": 0.9}]))
+    fake_b = FakeRouterLLM(make_reply([{"section_id": "sec_returns", "confidence": 0.85}]))
+
+    result_a, result_b = await asyncio.gather(
+        route(
+            "warranty question",
+            "doc_abc123",
+            golden_toc,
+            tenant_id="tenant_test",
+            llm=fake_a,
+            confidence_threshold=0.7,
+            max_sections=3,
+        ),
+        route(
+            "returns question",
+            "doc_abc123",
+            golden_toc,
+            tenant_id="tenant_test",
+            llm=fake_b,
+            confidence_threshold=0.7,
+            max_sections=3,
+        ),
+    )
+    assert result_a["relevant_sections"] == ["sec_warranty"]
+    assert result_b["relevant_sections"] == ["sec_returns"]
+    assert fake_a.call_count == 1
+    assert fake_b.call_count == 1
+
+
+async def test_exact_threshold_boundary_included(golden_toc: list[dict]) -> None:
+    """A section with confidence exactly equal to the threshold is included (>= not >)."""
+    threshold = 0.7
+    fake = FakeRouterLLM(
+        make_reply([{"section_id": "sec_warranty", "confidence": threshold}])
+    )
+    result = await route(
+        "How long is the warranty?",
+        "doc_abc123",
+        golden_toc,
+        tenant_id="tenant_test",
+        llm=fake,
+        confidence_threshold=threshold,
+        max_sections=3,
+    )
+    assert result["fallback"] is False
+    assert result["relevant_sections"] == ["sec_warranty"]
+    assert result["confidence"] == [threshold]

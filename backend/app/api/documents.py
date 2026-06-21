@@ -10,6 +10,7 @@ on success and a retryable 503 when the structure store is down (ADV-002).
 
 from __future__ import annotations
 
+import asyncio
 import datetime as _dt
 import math
 import os
@@ -167,7 +168,7 @@ async def ingest_document(
     response: Response,
     file: UploadFile = File(...),
     title: str | None = Form(default=None),
-    domain: str | None = Form(default=None),
+    domain: str | None = Form(default=None, max_length=100, pattern=r"^[a-zA-Z0-9._-]+$"),
     no_retention: bool = Form(default=False),
     residency_region: str = Form(default="GLOBAL"),
     ocr: bool = Form(default=False),
@@ -255,7 +256,7 @@ async def list_documents(
     # le=10_000 prevents OFFSET amplification attacks
     page: int = Query(default=1, ge=1, le=10_000),
     page_size: int = Query(default=20, ge=1, le=100),
-    domain: str | None = Query(default=None, max_length=64),
+    domain: str | None = Query(default=None, max_length=100, pattern=r"^[a-zA-Z0-9._-]+$"),
     principal: Principal = Depends(rate_limit()),
     store: DocumentStore = Depends(get_document_store),
 ) -> DocumentListResponse:
@@ -280,9 +281,14 @@ async def list_documents(
             str(exc) or "Document store unavailable."
         ) from exc
     total_pages = math.ceil(total_count / page_size) if page_size else 0
-    if page > max(1, total_pages):
+    if page > 1 and total_count == 0:
         raise validation_error(
-            detail="Requested page exceeds total pages.",
+            detail=f"No documents found. Cannot retrieve page {page}.",
+            errors=[{"field": "page", "message": "no documents available"}],
+        )
+    elif page > max(1, total_pages):
+        raise validation_error(
+            detail=f"Page {page} exceeds available pages (total={total_pages}).",
             errors=[{"field": "page", "message": f"must be <= {total_pages}"}],
         )
     return DocumentListResponse(
@@ -336,7 +342,6 @@ async def get_document(
     "/{doc_id}/toc",
     operation_id="getDocumentToc",
     response_model=TocResponse,
-    response_model_exclude_none=True,
 )
 async def get_document_toc(
     doc_id: _DocumentIdPath,
@@ -358,19 +363,16 @@ async def get_document_toc(
         ProblemException: 404 when the document is absent for the tenant.
     """
     try:
-        record = await store.get_document(principal.tenant_id, doc_id)
+        record, sections = await asyncio.gather(
+            store.get_document(principal.tenant_id, doc_id),
+            store.get_sections(principal.tenant_id, doc_id),
+        )
     except DependencyUnavailable as exc:
         raise service_unavailable(
             str(exc) or "Document store unavailable."
         ) from exc
     if record is None:
         raise document_not_found()
-    try:
-        sections = await store.get_sections(principal.tenant_id, doc_id)
-    except DependencyUnavailable as exc:
-        raise service_unavailable(
-            str(exc) or "Document store unavailable."
-        ) from exc
     return TocResponse(
         document_id=doc_id,
         fallback_only=record.fallback_only,
@@ -452,19 +454,16 @@ async def export_document_data(
         ProblemException: 404 when the document is absent for the tenant.
     """
     try:
-        record = await store.get_document(principal.tenant_id, doc_id)
+        record, sections = await asyncio.gather(
+            store.get_document(principal.tenant_id, doc_id),
+            store.get_sections(principal.tenant_id, doc_id),
+        )
     except DependencyUnavailable as exc:
         raise service_unavailable(
             str(exc) or "Document store unavailable."
         ) from exc
     if record is None:
         raise document_not_found()
-    try:
-        sections = await store.get_sections(principal.tenant_id, doc_id)
-    except DependencyUnavailable as exc:
-        raise service_unavailable(
-            str(exc) or "Document store unavailable."
-        ) from exc
     return DataAccessExport(
         doc_id=doc_id,
         generated_at=_now_iso(),

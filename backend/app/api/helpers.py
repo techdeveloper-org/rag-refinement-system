@@ -18,10 +18,14 @@ _PII_TOKEN_BUDGET = 100
 def new_query_id() -> str:
     """Generate a correlation id matching the ``qry_`` pattern (NFR-009).
 
+    Fix #199: use secrets.token_urlsafe(16) to produce an unpredictable,
+    cryptographically random id (128 bits of entropy) that prevents cross-stream
+    correlation attacks where a low-entropy query_id could be guessed.
+
     Returns:
-        A unique, URL-safe query id (e.g. ``qry_a1b2c3``).
+        A unique, URL-safe query id (e.g. ``qry_<22 url-safe chars>``).
     """
-    return "qry_" + secrets.token_hex(8)
+    return "qry_" + secrets.token_urlsafe(16)
 
 
 def estimate_token_reduction(selected: list[RoutedSection], total_pages: int) -> str:

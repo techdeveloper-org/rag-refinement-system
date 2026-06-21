@@ -31,6 +31,22 @@ _MIGRATIONS_DIR = pathlib.Path(__file__).resolve().parents[2] / "migrations"
 _FORWARD_SQL = _MIGRATIONS_DIR / "001_documents_sections.sql"
 _DOWN_SQL = _MIGRATIONS_DIR / "001_documents_sections.down.sql"
 
+# Migrations 002-004 extend the schema introduced by 001.  Tests that validate
+# schema invariants enforced by later migrations reference these paths directly.
+_FORWARD_SQL_002 = _MIGRATIONS_DIR / "002_indexes_constraints.sql"
+_FORWARD_SQL_003 = _MIGRATIONS_DIR / "003_erasure_outbox_fk.sql"
+_FORWARD_SQL_004 = _MIGRATIONS_DIR / "004_fix_tenant_hash_partial_index.sql"
+_DOWN_SQL_004 = _MIGRATIONS_DIR / "004_fix_tenant_hash_partial_index.down.sql"
+
+# Ordered list of all forward migrations — used by the live integration test
+# to apply them in dependency order.
+_ALL_FORWARD_MIGRATIONS: list[pathlib.Path] = [
+    _FORWARD_SQL,
+    _FORWARD_SQL_002,
+    _FORWARD_SQL_003,
+    _FORWARD_SQL_004,
+]
+
 
 def _read(path: pathlib.Path) -> str:
     """Read a migration file as UTF-8 text."""
@@ -58,9 +74,12 @@ def _table_block(ddl: str, table: str) -> str:
 
 
 def test_forward_migration_file_exists() -> None:
-    """The forward and rollback migration files are present."""
+    """All forward and rollback migration files are present (001-004)."""
     assert _FORWARD_SQL.is_file()
     assert _DOWN_SQL.is_file()
+    assert _FORWARD_SQL_002.is_file(), "Migration 002 forward file must exist"
+    assert _FORWARD_SQL_003.is_file(), "Migration 003 forward file must exist"
+    assert _FORWARD_SQL_004.is_file(), "Migration 004 forward file must exist"
 
 
 def test_every_table_has_tenant_id_not_null_in_ddl() -> None:
@@ -218,25 +237,116 @@ def test_metadata_registers_all_three_tables() -> None:
     }
 
 
+def test_migration_002_declares_composite_tenant_tombstoned_index() -> None:
+    """Migration 002 adds the composite tenant_id + tombstoned_at index (#120)."""
+    ddl = _read(_FORWARD_SQL_002)
+    assert "idx_documents_tenant_tombstoned" in ddl, (
+        "Migration 002 must declare idx_documents_tenant_tombstoned"
+    )
+    assert re.search(
+        r"idx_documents_tenant_tombstoned[\s\S]*tenant_id.*tombstoned_at",
+        ddl,
+        re.IGNORECASE,
+    ), "idx_documents_tenant_tombstoned must cover (tenant_id, tombstoned_at)"
+
+
+def test_migration_002_declares_erasure_outbox_uniqueness() -> None:
+    """Migration 002 adds the UNIQUE(doc_id, store) constraint on erasure_outbox (#103)."""
+    ddl = _read(_FORWARD_SQL_002)
+    assert "uq_erasure_outbox_doc_store" in ddl, (
+        "Migration 002 must declare uq_erasure_outbox_doc_store"
+    )
+
+
+def test_migration_002_declares_tenant_hash_unique_index() -> None:
+    """Migration 002 adds the UNIQUE(tenant_id, content_hash) index on documents (#104)."""
+    ddl = _read(_FORWARD_SQL_002)
+    assert "uq_documents_tenant_hash" in ddl, (
+        "Migration 002 must declare uq_documents_tenant_hash"
+    )
+    assert re.search(
+        r"uq_documents_tenant_hash[\s\S]*content_hash\s+IS\s+NOT\s+NULL",
+        ddl,
+        re.IGNORECASE,
+    ), "uq_documents_tenant_hash in migration 002 must be a partial index on content_hash IS NOT NULL"
+
+
+def test_migration_003_declares_erasure_outbox_fk() -> None:
+    """Migration 003 adds the FK constraint on erasure_outbox.doc_id (#74)."""
+    ddl = _read(_FORWARD_SQL_003)
+    assert "fk_erasure_outbox_doc_id" in ddl, (
+        "Migration 003 must declare fk_erasure_outbox_doc_id"
+    )
+    assert re.search(
+        r"REFERENCES\s+documents\s*\(\s*doc_id\s*\)",
+        ddl,
+        re.IGNORECASE,
+    ), "Migration 003 FK must reference documents(doc_id)"
+
+
+def test_migration_004_fixes_tenant_hash_partial_index() -> None:
+    """Migration 004 recreates uq_documents_tenant_hash excluding tombstoned rows (#206).
+
+    The fixed index must carry BOTH partial predicates:
+      - content_hash IS NOT NULL  (excludes ephemeral rows)
+      - tombstoned_at IS NULL     (excludes soft-deleted rows, fixing the bug)
+    """
+    ddl = _read(_FORWARD_SQL_004)
+    assert "uq_documents_tenant_hash" in ddl, (
+        "Migration 004 must reference uq_documents_tenant_hash"
+    )
+    assert re.search(
+        r"tombstoned_at\s+IS\s+NULL",
+        ddl,
+        re.IGNORECASE,
+    ), "Migration 004 partial index must exclude tombstoned rows (tombstoned_at IS NULL)"
+    assert re.search(
+        r"content_hash\s+IS\s+NOT\s+NULL",
+        ddl,
+        re.IGNORECASE,
+    ), "Migration 004 partial index must still exclude NULL content_hash rows"
+    # The old index must be dropped before the fixed one is created.
+    assert re.search(
+        r"DROP\s+INDEX\s+IF\s+EXISTS\s+uq_documents_tenant_hash",
+        ddl,
+        re.IGNORECASE,
+    ), "Migration 004 must DROP the old uq_documents_tenant_hash before recreating it"
+
+
+def test_migration_004_erasure_outbox_fk_is_cascade_in_model() -> None:
+    """ErasureOutbox.doc_id FK must use CASCADE so outbox rows are cleaned up (#223)."""
+    fks = list(ErasureOutbox.__table__.columns["doc_id"].foreign_keys)
+    assert len(fks) == 1, "ErasureOutbox.doc_id must have exactly one FK"
+    fk = fks[0]
+    assert fk.ondelete == "CASCADE", (
+        f"ErasureOutbox.doc_id FK must be ON DELETE CASCADE, got: {fk.ondelete!r}"
+    )
+
+
 @pytest.mark.skipif(
     not os.environ.get("DATABASE_URL"),
     reason="DATABASE_URL not set; live forward+rollback migration test skipped.",
 )
 def test_forward_then_rollback_restores_baseline() -> None:
-    """Apply forward DDL then rollback against a live Postgres; expect clean state.
+    """Apply all forward migrations in order, then rollback 001; expect clean state.
 
+    Applies migrations 001 through 004 in dependency order against a live Postgres
+    instance, then runs the 001 rollback. All migrations are tested, not just 001.
     Skipped without ``DATABASE_URL`` so the suite stays offline-green.
     """
     from sqlalchemy import create_engine, inspect, text
 
     engine = create_engine(os.environ["DATABASE_URL"])
-    forward = _read(_FORWARD_SQL)
-    down = _read(_DOWN_SQL)
-    with engine.begin() as conn:
-        conn.execute(text(forward))
+    # Apply all migrations in order (001 → 002 → 003 → 004).
+    for migration_path in _ALL_FORWARD_MIGRATIONS:
+        migration_sql = _read(migration_path)
+        with engine.begin() as conn:
+            conn.execute(text(migration_sql))
     inspector = inspect(engine)
     assert inspector.has_table("documents")
     assert inspector.has_table("sections")
+    # Roll back 001 (which cascades to drop all dependent objects).
+    down = _read(_DOWN_SQL)
     with engine.begin() as conn:
         conn.execute(text(down))
     inspector = inspect(engine)

@@ -130,6 +130,27 @@ def ensure_payload_indexes(
     return PAYLOAD_INDEX_FIELDS
 
 
+def _verify_vector_size(client: QdrantClient, collection_name: str) -> None:
+    """Verify that an existing collection's vector size matches VECTOR_SIZE.
+
+    Args:
+        client: Qdrant client to query.
+        collection_name: Name of the collection to inspect.
+
+    Raises:
+        RuntimeError: When the collection's configured vector size differs from
+            VECTOR_SIZE, indicating a schema mismatch that requires manual
+            intervention (delete the collection and restart).
+    """
+    collection_info = client.get_collection(collection_name)
+    actual_size = collection_info.config.params.vectors.size
+    if actual_size != VECTOR_SIZE:
+        raise RuntimeError(
+            f"Qdrant collection '{collection_name}' has vector size {actual_size} "
+            f"but VECTOR_SIZE={VECTOR_SIZE}. Delete the collection and restart."
+        )
+
+
 def bootstrap_collection(
     client: QdrantClient, collection_name: str = COLLECTION_NAME
 ) -> BootstrapResult:
@@ -137,6 +158,8 @@ def bootstrap_collection(
 
     Skips creation when the collection already exists (idempotent), then ensures
     the ``section_id`` / ``doc_id`` / ``tenant_id`` payload indexes either way.
+    When connecting to an existing collection, verifies that the configured vector
+    size equals VECTOR_SIZE to catch schema mismatches early (issue #202).
 
     Args:
         client: Qdrant client to operate on.
@@ -145,6 +168,10 @@ def bootstrap_collection(
     Returns:
         A BootstrapResult recording whether the collection was created and which
         payload fields were indexed.
+
+    Raises:
+        RuntimeError: When an existing collection has a vector size that does not
+            match VECTOR_SIZE.
     """
     exists = client.collection_exists(collection_name=collection_name)
     if not exists:
@@ -152,6 +179,7 @@ def bootstrap_collection(
             collection_name=collection_name,
             vectors_config=vectors_config(),
         )
+    _verify_vector_size(client, collection_name)
     indexed = ensure_payload_indexes(client, collection_name=collection_name)
     return BootstrapResult(created=not exists, indexed_fields=indexed)
 

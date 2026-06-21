@@ -109,11 +109,14 @@ def _cached_toc_json(doc_id: str, toc: Sequence[Mapping[str, Any]]) -> str:
     projected = _coerce_toc_for_prompt(toc)
     serialized = json.dumps(projected, ensure_ascii=True, sort_keys=True)
     with _TOC_JSON_CACHE_LOCK:
-        _TOC_JSON_CACHE[doc_id] = serialized
-        _TOC_JSON_CACHE.move_to_end(doc_id)
-        if len(_TOC_JSON_CACHE) > _TOC_CACHE_MAXSIZE:
-            _TOC_JSON_CACHE.popitem(last=False)
-    return serialized
+        if doc_id not in _TOC_JSON_CACHE:  # Guard: don't overwrite freshly-cached entry
+            _TOC_JSON_CACHE[doc_id] = serialized
+            _TOC_JSON_CACHE.move_to_end(doc_id)
+            if len(_TOC_JSON_CACHE) > _TOC_CACHE_MAXSIZE:
+                _TOC_JSON_CACHE.popitem(last=False)
+        else:
+            _TOC_JSON_CACHE.move_to_end(doc_id)
+        return _TOC_JSON_CACHE[doc_id]
 
 
 def clear_toc_cache() -> None:
@@ -151,6 +154,11 @@ def _node_extract_query(state: RouterState) -> RouterState:
     }
     state["toc_json"] = _cached_toc_json(state["doc_id"], toc)
     state["started_at"] = time.monotonic()
+    if not toc:
+        state["ranked"] = []
+        state["rationale"] = "Document has no TOC entries; using full-document search."
+        state["fallback"] = True
+        return state
     return state
 
 
@@ -169,6 +177,8 @@ async def _node_route(state: RouterState, llm: RouterLLM) -> RouterState:
     Returns:
         The state with ``ranked``, ``rationale``, and ``fallback`` populated.
     """
+    if state.get("fallback"):
+        return state
     allowed_ids = list(state["toc_by_id"].keys())
     system, messages = build_router_messages(
         query=state["query"],
@@ -176,7 +186,13 @@ async def _node_route(state: RouterState, llm: RouterLLM) -> RouterState:
         allowed_section_ids=allowed_ids,
         toc_json=state["toc_json"],
     )
-    raw = await llm.complete(system, messages)
+    try:
+        raw = await llm.complete(system, messages)
+    except Exception:
+        state["ranked"] = []
+        state["rationale"] = "Routing LLM call failed; falling back to full-document search."
+        state["fallback"] = True
+        return state
     try:
         parsed = parse_router_llm_json(raw)
     except Exception:
@@ -229,6 +245,9 @@ def _apply_threshold(
     high = [item for item in eligible if item.confidence >= confidence_threshold]
     if high:
         return high[:max_sections]
+    # Only fall back to mid-band for sub-HIGH_CONFIDENCE thresholds
+    if confidence_threshold >= HIGH_CONFIDENCE:
+        return []  # No section met the strict threshold -> fallback
     mid = [item for item in eligible if item.confidence < confidence_threshold]
     return mid[:max_sections]
 
@@ -280,14 +299,16 @@ def _node_build_output(state: RouterState) -> RouterState:
         for item in state["selected"]:
             entry = toc_by_id[item.section_id]
             relevant_sections.append(item.section_id)
-            page_ranges.append([int(entry["page_start"]), int(entry["page_end"])])
+            page_ranges.append([int(entry.get("page_start") or 0), int(entry.get("page_end") or 0)])
             confidence.append(item.confidence)
 
-    rationale = state.get("rationale") or (
-        "No section met the confidence threshold; using full-document search."
-        if state["fallback"]
-        else ""
-    )
+    raw_rationale = state.get("rationale")
+    if raw_rationale:
+        rationale = raw_rationale
+    elif state["fallback"]:
+        rationale = "No section met the confidence threshold; using full-document search."
+    else:
+        rationale = ""
 
     state["output"] = RouterOutput(
         relevant_sections=relevant_sections,
@@ -363,9 +384,11 @@ class RouterGraph:
         Args:
             llm: The injected routing LLM (deterministic fake in tests).
         """
+        global _active_router_backend
         self._llm = llm
         self._app = _build_langgraph(llm)
         self.backend = "langgraph" if self._app is not None else "async-pipeline"
+        _active_router_backend = self.backend
 
     async def run(
         self,
@@ -426,3 +449,14 @@ try:  # pragma: no cover - import probe only
     import langgraph as _langgraph_probe  # noqa: F401
 except ImportError:  # pragma: no cover
     ROUTER_BACKEND = "async-pipeline"
+
+_active_router_backend: str = ROUTER_BACKEND
+
+
+def get_router_backend() -> str:
+    """Return the backend currently in use by the active RouterGraph instance.
+
+    Returns:
+        The backend name: ``"langgraph"`` or ``"async-pipeline"``.
+    """
+    return _active_router_backend

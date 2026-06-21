@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 
 import httpx
-from fastapi import APIRouter, Response, status
+from fastapi import APIRouter, Request, Response, status
 from pydantic import BaseModel
 
 from backend.app.settings import Settings, get_settings
@@ -62,9 +62,12 @@ async def _check_postgres(database_url: str, timeout_seconds: float) -> bool:
         True if the authenticated query succeeded, otherwise False.
     """
     import asyncpg
+    import re
 
     try:
-        conn = await asyncpg.connect(database_url, timeout=timeout_seconds)
+        # asyncpg rejects SQLAlchemy dialect prefixes like postgresql+asyncpg://
+        clean_url = re.sub(r"^postgresql\+\w+://", "postgresql://", database_url)
+        conn = await asyncpg.connect(clean_url, timeout=timeout_seconds)
         try:
             await conn.execute("SELECT 1")
         finally:
@@ -155,18 +158,32 @@ async def get_health() -> HealthStatus:
     operation_id="getReadiness",
     response_model=ReadinessStatus,
 )
-async def get_readiness(response: Response) -> ReadinessStatus:
+async def get_readiness(request: Request, response: Response) -> ReadinessStatus:
     """Return readiness, setting HTTP 503 when any dependency is down.
 
+    Fix #181: dependency topology is only exposed to authenticated callers to
+    avoid disclosing infrastructure details (postgres/qdrant host reachability)
+    to unauthenticated probers. K8s liveness and readiness probes do not send
+    auth headers, so they still receive the correct status code; only the
+    ``dependencies`` breakdown is hidden from them.
+
     Args:
+        request: The incoming request (used to detect auth headers).
         response: The response object whose status code is set to 503 on a
             degraded result.
 
     Returns:
-        A ReadinessStatus describing each dependency's reachability.
+        A ReadinessStatus describing reachability. Unauthenticated callers
+        receive an empty ``dependencies`` dict; authenticated callers receive
+        the full per-dependency breakdown.
     """
     settings = get_settings()
     readiness = await evaluate_readiness(settings)
     if readiness.status != "ready":
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    has_auth = bool(
+        request.headers.get("X-API-Key") or request.headers.get("Authorization")
+    )
+    if not has_auth:
+        return ReadinessStatus(status=readiness.status, dependencies={})
     return readiness

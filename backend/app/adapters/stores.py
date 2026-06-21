@@ -15,6 +15,7 @@ is actually invoked, so importing this module requires no live services.
 
 from __future__ import annotations
 
+import threading
 from typing import Any
 
 from db.models import Document, Section
@@ -53,7 +54,15 @@ class SqlAlchemySectionStore:
         Returns:
             A store bound to a freshly created engine/session factory.
         """
-        engine = create_engine(database_url, pool_pre_ping=True)
+        engine_kwargs: dict[str, object] = {"pool_pre_ping": True}
+        if not database_url.startswith("sqlite"):
+            engine_kwargs.update(
+                pool_size=2,
+                max_overflow=3,
+                pool_timeout=30,
+                pool_recycle=3600,
+            )
+        engine = create_engine(database_url, **engine_kwargs)
         factory = sessionmaker(engine, expire_on_commit=False)
         return cls(factory)
 
@@ -108,7 +117,7 @@ class SqlAlchemySectionStore:
                 row = session.scalar(
                     select(Document).where(
                         Document.doc_id == doc_id, Document.tenant_id == tenant_id
-                    )
+                    ).with_for_update()
                 )
                 if row is None:
                     row = Document(doc_id=doc_id, tenant_id=tenant_id)
@@ -224,7 +233,7 @@ class SqlAlchemySectionStore:
                 doc_row = session.scalar(
                     select(Document).where(
                         Document.doc_id == doc_id, Document.tenant_id == tenant_id
-                    )
+                    ).with_for_update()
                 )
                 if doc_row is None:
                     doc_row = Document(doc_id=doc_id, tenant_id=tenant_id)
@@ -289,7 +298,9 @@ class SqlAlchemySectionStore:
             DependencyUnavailable: When the structure store is unreachable.
         """
         stmt = select(Document).where(
-            Document.doc_id == doc_id, Document.tenant_id == tenant_id
+            Document.doc_id == doc_id,
+            Document.tenant_id == tenant_id,
+            Document.tombstoned_at.is_(None),
         )
         try:
             with self._session_factory() as session, session.begin():
@@ -315,17 +326,23 @@ class QdrantVectorStore:
                 lazily from ``QDRANT_URL`` when omitted.
         """
         self._client = client
+        self._client_lock = threading.Lock()
 
     def _ensure_client(self) -> object:
-        """Lazily construct the Qdrant client from ``QDRANT_URL``.
+        """Lazily construct the Qdrant client from ``QDRANT_URL`` (thread-safe).
+
+        Uses double-checked locking so concurrent ingestion threads do not race
+        to create multiple client instances.
 
         Returns:
             The Qdrant client instance.
         """
         if self._client is None:
-            from db.qdrant_bootstrap import get_client
+            with self._client_lock:
+                if self._client is None:
+                    from db.qdrant_bootstrap import get_client
 
-            self._client = get_client()
+                    self._client = get_client()
         return self._client
 
     def upsert_points(self, points: list[dict[str, Any]]) -> int:
@@ -353,3 +370,27 @@ class QdrantVectorStore:
                 f"Qdrant upsert did not complete; status={result.status}"
             )
         return len(points)
+
+    def delete_points_for_doc(self, doc_id: str) -> None:
+        """Delete all Qdrant points whose payload ``doc_id`` matches ``doc_id``.
+
+        Used as a compensating rollback when a Postgres commit succeeds but a
+        subsequent Qdrant upsert fails, to prevent orphaned vectors (issue #208).
+        The deletion is best-effort; callers must not rely on it for correctness
+        since re-ingest via deterministic point ids is idempotent.
+
+        Args:
+            doc_id: The document id whose chunk points should be deleted.
+        """
+        from db.qdrant_bootstrap import COLLECTION_NAME
+        from qdrant_client import models as qm
+
+        client = self._ensure_client()
+        client.delete(  # type: ignore[attr-defined]
+            collection_name=COLLECTION_NAME,
+            points_selector=qm.FilterSelector(
+                filter=qm.Filter(
+                    must=[qm.FieldCondition(key="doc_id", match=qm.MatchValue(value=doc_id))]
+                )
+            ),
+        )

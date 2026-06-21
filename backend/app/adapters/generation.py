@@ -22,18 +22,47 @@ import os
 from collections.abc import AsyncIterator
 
 from backend.app.api.interfaces import DependencyUnavailable, RoutedSection
+from backend.app.settings import get_settings
 
 DEFAULT_GENERATION_MODEL = os.environ.get("GENERATION_MODEL", "claude-opus-4-8")
 """Answer-synthesis model id (overridable via the GENERATION_MODEL env var)."""
 
-DEFAULT_MAX_TOKENS = int(os.environ.get("GENERATION_MAX_TOKENS", "16000"))
-"""Output token ceiling for a synthesized answer (must exceed DEFAULT_THINKING_BUDGET_TOKENS)."""
-
-DEFAULT_THINKING_BUDGET_TOKENS = 5000
-"""Default extended-thinking budget in tokens."""
-
 DEFAULT_STREAM_TIMEOUT = 300.0
 """Total timeout in seconds for a streaming answer generation call."""
+
+_THINKING_CAPABLE_MODELS = (
+    "claude-3-7",
+    "claude-opus-4",
+    "claude-sonnet-4",
+    "claude-haiku-4",
+    "claude-fable",
+)
+"""Model id prefixes that support extended thinking (budget_tokens parameter)."""
+
+
+def _default_max_tokens() -> int:
+    """Return the configured max-tokens ceiling, falling back to 16 000.
+
+    Returns:
+        The generation_max_tokens value from settings, or 16 000 on error.
+    """
+    try:
+        return get_settings().generation_max_tokens
+    except Exception:
+        return 16000
+
+
+def _default_thinking_budget() -> int:
+    """Return the configured thinking-budget token count, falling back to 5 000.
+
+    Returns:
+        The generation_thinking_budget_tokens value from settings, or 5 000 on error.
+    """
+    try:
+        return get_settings().generation_thinking_budget_tokens
+    except Exception:
+        return 5000
+
 
 _SYSTEM_PROMPT = (
     "You are a retrieval-augmented answer assistant. Answer the user's question "
@@ -72,24 +101,32 @@ class ClaudeGenerationLLM:
     def __init__(
         self,
         model: str = DEFAULT_GENERATION_MODEL,
-        max_tokens: int = DEFAULT_MAX_TOKENS,
-        thinking_budget_tokens: int = DEFAULT_THINKING_BUDGET_TOKENS,
+        max_tokens: int | None = None,
+        thinking_budget_tokens: int | None = None,
         client: object | None = None,
     ) -> None:
         """Initialize the adapter.
 
         Args:
             model: Generation model id (defaults to Claude Opus 4.8).
-            max_tokens: Output token ceiling for the synthesized answer.
+            max_tokens: Output token ceiling for the synthesized answer. When
+                omitted, the value is read from settings (GENERATION_MAX_TOKENS).
             thinking_budget_tokens: Extended-thinking budget in tokens passed to
-                the Anthropic ``thinking`` parameter.
+                the Anthropic ``thinking`` parameter. When omitted, read from
+                settings (GENERATION_THINKING_BUDGET_TOKENS).
             client: Optional pre-built ``anthropic.AsyncAnthropic`` instance. When
                 omitted, one is constructed lazily on first use so importing this
                 module never requires credentials.
         """
         self._model = model
-        self._max_tokens = max_tokens
-        self._thinking_budget_tokens = thinking_budget_tokens
+        self._max_tokens = max_tokens if max_tokens is not None else _default_max_tokens()
+        self._thinking_budget_tokens = (
+            thinking_budget_tokens
+            if thinking_budget_tokens is not None
+            else _default_thinking_budget()
+        )
+        if self._thinking_budget_tokens >= self._max_tokens:
+            self._thinking_budget_tokens = max(1000, self._max_tokens - 1000)
         self._client = client
         self._client_lock = asyncio.Lock()
 
@@ -155,17 +192,26 @@ class ClaudeGenerationLLM:
             "</routed_sections>\n\n"
             "Answer the question using only the information in the routed sections above."
         )
+        stream_kwargs: dict[str, object] = {
+            "model": self._model,
+            "max_tokens": self._max_tokens,
+            "system": _SYSTEM_PROMPT,
+            "messages": [{"role": "user", "content": user_message}],
+            "timeout": DEFAULT_STREAM_TIMEOUT,
+        }
+        if any(self._model.startswith(prefix) for prefix in _THINKING_CAPABLE_MODELS):
+            stream_kwargs["thinking"] = {
+                "type": "enabled",
+                "budget_tokens": self._thinking_budget_tokens,
+            }
         try:
             async with client.messages.stream(  # type: ignore[attr-defined]
-                model=self._model,
-                max_tokens=self._max_tokens,
-                thinking={"type": "enabled", "budget_tokens": self._thinking_budget_tokens},
-                system=_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": user_message}],
-                timeout=DEFAULT_STREAM_TIMEOUT,
+                **stream_kwargs
             ) as stream:
                 async for text in stream.text_stream:
                     yield text
+        except asyncio.CancelledError:
+            raise
         except DependencyUnavailable:
             raise
         except Exception as exc:
@@ -177,6 +223,7 @@ class ClaudeGenerationLLM:
                         _anthropic.RateLimitError,
                         _anthropic.AuthenticationError,
                         _anthropic.APIConnectionError,
+                        _anthropic.APIStatusError,
                     ),
                 ):
                     raise DependencyUnavailable(
