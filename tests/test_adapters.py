@@ -405,6 +405,11 @@ class _StubSectionStore:
         self.hash_lookups += 1
         return self._existing
 
+    def update_residency_region(
+        self, doc_id: str, tenant_id: str, residency_region: str
+    ) -> None:
+        """No-op residency update for the test stub."""
+
 
 class TestPipelineIngestor:
     """PipelineIngestor maps the pipeline dict onto IngestOutcome."""

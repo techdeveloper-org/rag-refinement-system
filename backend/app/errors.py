@@ -399,4 +399,4 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(ProblemException, _handle_problem)  # type: ignore[arg-type]
     app.add_exception_handler(RequestValidationError, _handle_request_validation)  # type: ignore[arg-type]
     app.add_exception_handler(StarletteHTTPException, _handle_http_exception)  # type: ignore[arg-type]
-    app.add_exception_handler(Exception, _handle_unexpected)  # type: ignore[arg-type]
+    app.add_exception_handler(Exception, _handle_unexpected)

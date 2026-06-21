@@ -110,7 +110,7 @@ async def route_query(
     # Fix #251 + #277: re-raise domain exceptions and identify the specific
     # doc_id that was not found rather than raising a generic 404.
     docs = []
-    for doc_id, result in zip(document_ids, results):
+    for doc_id, result in zip(document_ids, results, strict=True):
         if isinstance(result, BaseException):
             raise result
         if result is None:
@@ -122,7 +122,10 @@ async def route_query(
     for document in docs:
         if document.fallback_only:
             raise validation_error(
-                detail="One or more documents were indexed in fallback mode and do not support section-level routing.",
+                detail=(
+                    "One or more documents were indexed in fallback mode"
+                    " and do not support section-level routing."
+                ),
                 errors=[{"field": "document_ids", "message": "fallback-only document"}],
             )
 

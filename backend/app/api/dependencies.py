@@ -25,7 +25,6 @@ from backend.app.api.interfaces import (
 from backend.app.errors import service_unavailable
 from backend.app.settings import get_settings
 
-
 _document_store_cache: DocumentStore | None = None
 _document_store_lock = __import__("threading").Lock()
 

@@ -239,12 +239,12 @@ def _decode_jwt(token: str, settings: Settings) -> dict[str, object]:
             decode_kwargs["audience"] = settings.jwt_audience
         if settings.jwt_issuer:
             decode_kwargs["issuer"] = settings.jwt_issuer
-        claims = jwt.decode(  # type: ignore[call-overload]
+        claims = jwt.decode(
             token,
             settings.jwt_secret,
             algorithms=[settings.jwt_algorithm],
-            options=options,
-            **decode_kwargs,
+            options=options,  # type: ignore[arg-type]
+            **decode_kwargs,  # type: ignore[arg-type]
         )
     except jwt.PyJWTError as exc:
         raise unauthorized("Bearer token is invalid or expired.") from exc

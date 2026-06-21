@@ -118,7 +118,7 @@ class RelevantSection(_Strict):
     confidence: Confidence
 
     @model_validator(mode="after")
-    def _page_range_valid(self) -> "RelevantSection":
+    def _page_range_valid(self) -> RelevantSection:
         """Validate page_start <= page_end."""
         if self.page_start > self.page_end:
             raise ValueError(
@@ -216,7 +216,7 @@ class TocEntry(_Strict):
     summary: str | None = None
 
     @model_validator(mode="after")
-    def _page_range_valid(self) -> "TocEntry":
+    def _page_range_valid(self) -> TocEntry:
         """Validate page_start <= page_end."""
         if self.page_start > self.page_end:
             raise ValueError(
