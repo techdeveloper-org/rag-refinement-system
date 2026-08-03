@@ -179,7 +179,8 @@ def bootstrap_collection(
             collection_name=collection_name,
             vectors_config=vectors_config(),
         )
-    _verify_vector_size(client, collection_name)
+    else:
+        _verify_vector_size(client, collection_name)
     indexed = ensure_payload_indexes(client, collection_name=collection_name)
     return BootstrapResult(created=not exists, indexed_fields=indexed)
 

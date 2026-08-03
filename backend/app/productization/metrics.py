@@ -1,4 +1,4 @@
-"""In-process product-KPI metrics registry (PRD §21, NFR-009).
+"""In-process product-KPI metrics registry (PRD Sec. 21, NFR-009).
 
 Tracks the four product KPIs the PRD measures the system against:
 

@@ -19,7 +19,7 @@ from typing import Protocol, runtime_checkable
 
 logger = logging.getLogger(__name__)
 
-MAX_PDF_BYTES: int = 100 * 1024 * 1024  # 100 MB — fix #246
+MAX_PDF_BYTES: int = 100 * 1024 * 1024  # 100 MB - fix #246
 
 
 class ParseError(ValueError):

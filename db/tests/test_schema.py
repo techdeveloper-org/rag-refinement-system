@@ -38,7 +38,7 @@ _FORWARD_SQL_003 = _MIGRATIONS_DIR / "003_erasure_outbox_fk.sql"
 _FORWARD_SQL_004 = _MIGRATIONS_DIR / "004_fix_tenant_hash_partial_index.sql"
 _DOWN_SQL_004 = _MIGRATIONS_DIR / "004_fix_tenant_hash_partial_index.down.sql"
 
-# Ordered list of all forward migrations — used by the live integration test
+# Ordered list of all forward migrations - used by the live integration test
 # to apply them in dependency order.
 _ALL_FORWARD_MIGRATIONS: list[pathlib.Path] = [
     _FORWARD_SQL,
@@ -268,7 +268,10 @@ def test_migration_002_declares_tenant_hash_unique_index() -> None:
         r"uq_documents_tenant_hash[\s\S]*content_hash\s+IS\s+NOT\s+NULL",
         ddl,
         re.IGNORECASE,
-    ), "uq_documents_tenant_hash in migration 002 must be a partial index on content_hash IS NOT NULL"
+    ), (
+        "uq_documents_tenant_hash in migration 002 must be a partial index "
+        "on content_hash IS NOT NULL"
+    )
 
 
 def test_migration_003_declares_erasure_outbox_fk() -> None:
@@ -337,7 +340,7 @@ def test_forward_then_rollback_restores_baseline() -> None:
     from sqlalchemy import create_engine, inspect, text
 
     engine = create_engine(os.environ["DATABASE_URL"])
-    # Apply all migrations in order (001 → 002 → 003 → 004).
+    # Apply all migrations in order (001 -> 002 -> 003 -> 004).
     for migration_path in _ALL_FORWARD_MIGRATIONS:
         migration_sql = _read(migration_path)
         with engine.begin() as conn:

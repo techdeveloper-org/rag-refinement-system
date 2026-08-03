@@ -138,6 +138,7 @@ class FakeSectionStore:
         content_hash_value: str | None,
         ingest_status: str,
         fallback_only: bool,
+        residency_region: str = "GLOBAL",
     ) -> None:
         """Create or update a document row and index its content hash.
 
@@ -150,6 +151,7 @@ class FakeSectionStore:
             content_hash_value: Content hash (None in no-retention).
             ingest_status: Ingest status enum value.
             fallback_only: Scenario C flag.
+            residency_region: DPDP data-residency region; defaults to GLOBAL.
         """
         self.documents[doc_id] = {
             "doc_id": doc_id,
@@ -160,6 +162,7 @@ class FakeSectionStore:
             "content_hash": content_hash_value,
             "ingest_status": ingest_status,
             "fallback_only": fallback_only,
+            "residency_region": residency_region,
         }
         if content_hash_value is not None:
             self.hash_index[(tenant_id, content_hash_value)] = doc_id
@@ -222,6 +225,7 @@ class FakeSectionStore:
             content_hash_value=content_hash_value,
             ingest_status=ingest_status,
             fallback_only=fallback_only,
+            residency_region=residency_region,
         )
         return self.replace_sections(tenant_id, doc_id, rows)
 

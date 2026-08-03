@@ -12,7 +12,9 @@ from fastapi.testclient import TestClient
 
 from backend.app import health as health_module
 from backend.app.main import create_app
+from backend.app.security.auth import get_api_key_store
 from backend.app.settings import Settings
+from tests.conftest import TENANT_A
 
 
 @pytest.fixture
@@ -38,9 +40,11 @@ def test_ready_returns_503_when_dependency_down(
 ) -> None:
     """Readiness must return 503 when a configured dependency is down.
 
-    Sends an API-key header so the dependency breakdown is included in the
-    response (authenticated callers receive the full ``dependencies`` map per
-    the auth-gating logic in ``get_readiness``).
+    Sends a registered, valid API-key header so the dependency breakdown is
+    included in the response (authenticated callers receive the full
+    ``dependencies`` map per the auth-gating logic in ``get_readiness``, which
+    verifies the credential via :func:`resolve_principal` rather than merely
+    checking for header presence).
     """
 
     async def fake_evaluate(settings: Settings) -> health_module.ReadinessStatus:
@@ -50,11 +54,36 @@ def test_ready_returns_503_when_dependency_down(
         )
 
     monkeypatch.setattr(health_module, "evaluate_readiness", fake_evaluate)
+    get_api_key_store().register("probe-key", TENANT_A, "key_probe")
     response = client.get("/ready", headers={"X-API-Key": "probe-key"})
     assert response.status_code == 503
     body = response.json()
     assert body["status"] == "degraded"
     assert body["dependencies"]["postgres"] == "down"
+
+
+def test_ready_hides_dependencies_for_unregistered_api_key(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An unregistered/bogus API key must not unlock the dependency breakdown.
+
+    The credential is fully verified (hash lookup), not merely checked for
+    presence, so an arbitrary header value is treated the same as no header
+    at all.
+    """
+
+    async def fake_evaluate(settings: Settings) -> health_module.ReadinessStatus:
+        return health_module.ReadinessStatus(
+            status="degraded",
+            dependencies={"postgres": "down", "qdrant": "up"},
+        )
+
+    monkeypatch.setattr(health_module, "evaluate_readiness", fake_evaluate)
+    response = client.get("/ready", headers={"X-API-Key": "never-registered"})
+    assert response.status_code == 503
+    body = response.json()
+    assert body["status"] == "degraded"
+    assert body["dependencies"] == {}
 
 
 def test_ready_returns_200_when_deps_up(

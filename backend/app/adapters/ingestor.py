@@ -1,4 +1,4 @@
-﻿"""Ingestor adapter binding ``ingestion.ingest_document`` to the backend Protocol.
+"""Ingestor adapter binding ``ingestion.ingest_document`` to the backend Protocol.
 
 The backend :class:`Ingestor` Protocol is ``ingest_document(tenant_id, content,
 filename, title, domain, no_retention, residency_region, ocr) -> IngestOutcome``.
@@ -247,6 +247,7 @@ class PipelineIngestor:
         toc = list(result.get("toc") or [])
         fallback_only = bool(result.get("fallback_only", False))
         extracted_title = result.get("title") or title
+
         return IngestOutcome(
             doc_id=doc_id_str,
             title=extracted_title,
