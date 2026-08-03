@@ -354,7 +354,9 @@ async def test_forward_then_rollback_restores_baseline() -> None:
     async def _exec_script(conn: AsyncConnection, sql: str) -> None:
         """Run a (possibly multi-statement) SQL script via the raw driver connection."""
         raw_connection = await conn.get_raw_connection()
-        await raw_connection.driver_connection.execute(sql)
+        driver_connection = raw_connection.driver_connection
+        assert driver_connection is not None
+        await driver_connection.execute(sql)
 
     engine = create_async_engine(os.environ["DATABASE_URL"])
     try:
