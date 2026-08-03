@@ -342,10 +342,19 @@ async def test_forward_then_rollback_restores_baseline() -> None:
     ``asyncpg`` being the project's only Postgres driver dependency), so this
     uses ``create_async_engine`` rather than the sync ``create_engine`` -
     mixing a sync engine with an async-only driver raises
-    ``sqlalchemy.exc.MissingGreenlet``.
+    ``sqlalchemy.exc.MissingGreenlet``. Each migration script is applied via
+    the raw asyncpg connection rather than ``conn.execute(text(...))``:
+    SQLAlchemy's asyncpg dialect always prepares statements, and Postgres's
+    extended query protocol rejects multiple commands in one prepared
+    statement, which every multi-statement migration file here is.
     """
-    from sqlalchemy import inspect, text
-    from sqlalchemy.ext.asyncio import create_async_engine
+    from sqlalchemy import inspect
+    from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
+
+    async def _exec_script(conn: AsyncConnection, sql: str) -> None:
+        """Run a (possibly multi-statement) SQL script via the raw driver connection."""
+        raw_connection = await conn.get_raw_connection()
+        await raw_connection.driver_connection.execute(sql)
 
     engine = create_async_engine(os.environ["DATABASE_URL"])
     try:
@@ -353,7 +362,7 @@ async def test_forward_then_rollback_restores_baseline() -> None:
         for migration_path in _ALL_FORWARD_MIGRATIONS:
             migration_sql = _read(migration_path)
             async with engine.begin() as conn:
-                await conn.execute(text(migration_sql))
+                await _exec_script(conn, migration_sql)
         async with engine.connect() as conn:
             has_documents = await conn.run_sync(
                 lambda sync_conn: inspect(sync_conn).has_table("documents")
@@ -366,7 +375,7 @@ async def test_forward_then_rollback_restores_baseline() -> None:
         # Roll back 001 (which cascades to drop all dependent objects).
         down = _read(_DOWN_SQL)
         async with engine.begin() as conn:
-            await conn.execute(text(down))
+            await _exec_script(conn, down)
         async with engine.connect() as conn:
             sections_remain = await conn.run_sync(
                 lambda sync_conn: inspect(sync_conn).has_table("sections")
