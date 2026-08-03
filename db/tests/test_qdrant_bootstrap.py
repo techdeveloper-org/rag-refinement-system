@@ -28,13 +28,15 @@ def _fake_collection_info(size: int) -> SimpleNamespace:
     """Build a minimal stand-in exposing only the attribute path bootstrap reads.
 
     Real ``qm.CollectionInfo`` construction requires many unrelated required
-    fields that drift across qdrant-client versions; the production code only
-    ever reads ``.config.params.vectors.size``.
+    fields that drift across qdrant-client versions, so everything except
+    ``vectors`` is a plain stand-in; ``vectors`` itself must be a real
+    ``qm.VectorParams`` since ``_verify_vector_size`` does an ``isinstance``
+    check against it (to reject named-vector collections it cannot support).
     """
     return SimpleNamespace(
         config=SimpleNamespace(
             params=SimpleNamespace(
-                vectors=SimpleNamespace(size=size, distance=qm.Distance.COSINE)
+                vectors=qm.VectorParams(size=size, distance=qm.Distance.COSINE)
             )
         )
     )

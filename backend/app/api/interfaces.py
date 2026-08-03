@@ -214,7 +214,8 @@ class GenerationLLM(Protocol):
         sections: list[RoutedSection],
     ) -> AsyncIterator[str]:
         """Yield answer token fragments for the routed sections."""
-        ...
+        raise NotImplementedError
+        yield  # pragma: no cover - unreachable, marks this an async generator
 
 
 class DependencyUnavailable(Exception):  # noqa: N818 - maps to SERVICE_UNAVAILABLE, not an *Error

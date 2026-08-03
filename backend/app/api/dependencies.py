@@ -149,10 +149,10 @@ def _generation_llm_singleton() -> GenerationLLM:
             from backend.app.settings import get_settings
 
             settings = get_settings()
-            _generation_llm_cache = ClaudeGenerationLLM(  # type: ignore[assignment]
+            _generation_llm_cache = ClaudeGenerationLLM(
                 thinking_budget_tokens=settings.generation_thinking_budget_tokens
             )
-    return _generation_llm_cache  # type: ignore[return-value]
+    return _generation_llm_cache
 
 
 def get_document_store() -> DocumentStore:
