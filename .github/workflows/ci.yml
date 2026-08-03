@@ -27,7 +27,7 @@ jobs:
       - name: Install dev dependencies
         run: pip install ".[dev]"
       - name: Ruff lint
-        run: ruff check backend ingestion tests
+        run: ruff check backend ingestion router db tests
 
   typecheck:
     timeout-minutes: 30
@@ -136,6 +136,26 @@ jobs:
               f"({len(baseline_keys)} acknowledged findings in baseline)."
           )
           PY
+
+  frontend-test:
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install frontend dependencies
+        run: npm ci
+      - name: ESLint
+        run: npm run lint
+      - name: TypeScript typecheck
+        run: npm run typecheck
+      - name: Vitest
+        run: npm run test
 
   frontend-security:
     timeout-minutes: 30
