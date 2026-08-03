@@ -11,6 +11,8 @@ WORKDIR /build
 COPY pyproject.toml ./
 COPY backend ./backend
 COPY ingestion ./ingestion
+COPY router ./router
+COPY db ./db
 COPY README.md ./
 
 RUN pip install --prefix=/install .
@@ -30,6 +32,8 @@ WORKDIR /app
 COPY --from=builder /install /usr/local
 COPY backend ./backend
 COPY ingestion ./ingestion
+COPY router ./router
+COPY db ./db
 
 USER app
 
