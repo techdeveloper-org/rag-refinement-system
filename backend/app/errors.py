@@ -105,11 +105,11 @@ def unauthorized(
     """Build a 401 UNAUTHORIZED problem.
 
     The ``WWW-Authenticate: Bearer`` header is included on every 401 response
-    per RFC 6750 §3 so that HTTP clients and API gateways can identify the
+    per RFC 6750 Sec. 3 so that HTTP clients and API gateways can identify the
     accepted credential scheme.  This is intentional even when only API-key
     auth is configured: the header is informational and harmless, and omitting
     it would require threading settings through every error-raise site (issue
-    #183 — accepted as RFC-compliant behaviour).
+    #183 - accepted as RFC-compliant behaviour).
 
     Args:
         detail: Occurrence-specific explanation.

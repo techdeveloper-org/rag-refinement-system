@@ -8,6 +8,8 @@ mandatory tenant_id isolation filter (IDOR guard).
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 from qdrant_client import models as qm
 
@@ -20,6 +22,32 @@ from db.qdrant_bootstrap import (
     tenant_section_filter,
     vectors_config,
 )
+
+
+def _fake_collection_info(size: int) -> SimpleNamespace:
+    """Build a minimal stand-in exposing only the attribute path bootstrap reads.
+
+    Real ``qm.CollectionInfo`` construction requires many unrelated required
+    fields that drift across qdrant-client versions, so everything except
+    ``vectors`` is a plain stand-in; ``vectors`` itself must be a real
+    ``qm.VectorParams`` since ``_verify_vector_size`` does an ``isinstance``
+    check against it (to reject named-vector collections it cannot support).
+    """
+    return SimpleNamespace(
+        config=SimpleNamespace(
+            params=SimpleNamespace(
+                vectors=qm.VectorParams(size=size, distance=qm.Distance.COSINE)
+            )
+        )
+    )
+
+
+def test_existing_collection_with_mismatched_vector_size_raises() -> None:
+    """Bootstrap raises when an existing collection's vector size differs."""
+    client = FakeQdrantClient(existing=True)
+    client.get_collection = lambda collection_name: _fake_collection_info(768)  # type: ignore[method-assign]
+    with pytest.raises(RuntimeError, match="vector size"):
+        bootstrap_collection(client)  # type: ignore[arg-type]
 
 
 class FakeQdrantClient:
@@ -61,6 +89,10 @@ class FakeQdrantClient:
     ) -> None:
         """Record a payload-index call for ``field_name``."""
         self.payload_indexes.append(field_name)
+
+    def get_collection(self, collection_name: str) -> SimpleNamespace:
+        """Return collection info reporting a vector size matching VECTOR_SIZE."""
+        return _fake_collection_info(VECTOR_SIZE)
 
 
 def test_vector_size_matches_embedding_model() -> None:

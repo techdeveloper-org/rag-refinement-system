@@ -150,7 +150,7 @@ class TestEvaluateReadiness:
 
     async def test_unconfigured_dependencies_report_degraded(self) -> None:
         """Unconfigured DATABASE_URL/QDRANT_URL surface as degraded + down."""
-        settings = Settings(database_url=None, qdrant_url=None, JWT_ISSUER="test-issuer")
+        settings = Settings(DATABASE_URL=None, QDRANT_URL=None, JWT_ISSUER="test-issuer")
         readiness = await health.evaluate_readiness(settings)
         assert readiness.status == "degraded"
         assert readiness.dependencies == {"postgres": "down", "qdrant": "down"}

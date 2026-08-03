@@ -180,7 +180,7 @@ class Citation(_Strict):
     page_end: Annotated[int, Field(ge=1)]
 
     @model_validator(mode="after")
-    def _validate_page_range(self) -> "Citation":
+    def _validate_page_range(self) -> Citation:
         """Validate page_start <= page_end.
 
         Returns:
@@ -267,7 +267,7 @@ class Document(_Strict):
     doc_id: DocumentId
     title: str | None = None
     total_pages: Annotated[int, Field(ge=0)]
-    domain: Annotated[str, Field(max_length=100, pattern=r"^[a-zA-Z0-9._-]+$")] | None = None
+    domain: str | None = None
     residency_region: ResidencyRegion
     fallback_only: bool
     created_at: str | None = None

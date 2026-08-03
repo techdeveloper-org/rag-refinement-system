@@ -15,6 +15,8 @@ import httpx
 from fastapi import APIRouter, Request, Response, status
 from pydantic import BaseModel
 
+from backend.app.errors import ProblemException
+from backend.app.security.auth import resolve_principal
 from backend.app.settings import Settings, get_settings
 
 router = APIRouter(tags=["Operations"])
@@ -61,8 +63,9 @@ async def _check_postgres(database_url: str, timeout_seconds: float) -> bool:
     Returns:
         True if the authenticated query succeeded, otherwise False.
     """
-    import asyncpg
     import re
+
+    import asyncpg
 
     try:
         # asyncpg rejects SQLAlchemy dialect prefixes like postgresql+asyncpg://
@@ -165,10 +168,13 @@ async def get_readiness(request: Request, response: Response) -> ReadinessStatus
     avoid disclosing infrastructure details (postgres/qdrant host reachability)
     to unauthenticated probers. K8s liveness and readiness probes do not send
     auth headers, so they still receive the correct status code; only the
-    ``dependencies`` breakdown is hidden from them.
+    ``dependencies`` breakdown is hidden from them. The credential is fully
+    verified via :func:`resolve_principal` (signature/expiry/key-hash checks) -
+    a caller cannot see the breakdown by merely sending an arbitrary header
+    value, since that would defeat the purpose of hiding it.
 
     Args:
-        request: The incoming request (used to detect auth headers).
+        request: The incoming request (used to verify the caller's credential).
         response: The response object whose status code is set to 503 on a
             degraded result.
 
@@ -181,9 +187,8 @@ async def get_readiness(request: Request, response: Response) -> ReadinessStatus
     readiness = await evaluate_readiness(settings)
     if readiness.status != "ready":
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
-    has_auth = bool(
-        request.headers.get("X-API-Key") or request.headers.get("Authorization")
-    )
-    if not has_auth:
+    try:
+        resolve_principal(request, settings)
+    except ProblemException:
         return ReadinessStatus(status=readiness.status, dependencies={})
     return readiness

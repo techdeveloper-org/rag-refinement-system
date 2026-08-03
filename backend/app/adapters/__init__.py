@@ -44,7 +44,10 @@ def __getattr__(name: str) -> object:
         AttributeError: When ``name`` is not a known adapter.
     """
     _lazy_map = {
-        "SqlAlchemyDocumentStore": ("backend.app.adapters.document_store", "SqlAlchemyDocumentStore"),
+        "SqlAlchemyDocumentStore": (
+            "backend.app.adapters.document_store",
+            "SqlAlchemyDocumentStore",
+        ),
         "ClaudeGenerationLLM": ("backend.app.adapters.generation", "ClaudeGenerationLLM"),
         "PipelineIngestor": ("backend.app.adapters.ingestor", "PipelineIngestor"),
         "RouterModuleAdapter": ("backend.app.adapters.router", "RouterModuleAdapter"),

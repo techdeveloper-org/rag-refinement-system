@@ -143,7 +143,14 @@ def _verify_vector_size(client: QdrantClient, collection_name: str) -> None:
             intervention (delete the collection and restart).
     """
     collection_info = client.get_collection(collection_name)
-    actual_size = collection_info.config.params.vectors.size
+    vectors = collection_info.config.params.vectors
+    if not isinstance(vectors, qm.VectorParams):
+        raise RuntimeError(
+            f"Qdrant collection '{collection_name}' does not use a single unnamed "
+            "vector config (found named-vectors or no vectors); this collection was "
+            "not created by bootstrap_collection. Delete it and restart."
+        )
+    actual_size = vectors.size
     if actual_size != VECTOR_SIZE:
         raise RuntimeError(
             f"Qdrant collection '{collection_name}' has vector size {actual_size} "
@@ -179,7 +186,8 @@ def bootstrap_collection(
             collection_name=collection_name,
             vectors_config=vectors_config(),
         )
-    _verify_vector_size(client, collection_name)
+    else:
+        _verify_vector_size(client, collection_name)
     indexed = ensure_payload_indexes(client, collection_name=collection_name)
     return BootstrapResult(created=not exists, indexed_fields=indexed)
 

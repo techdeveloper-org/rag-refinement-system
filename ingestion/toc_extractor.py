@@ -309,7 +309,7 @@ def extract_toc(
             refined = llm_refiner.refine(heuristic)
             if not refined and heuristic:
                 logger.warning(
-                    "LLM refiner returned empty result for %d heuristic entries — "
+                    "LLM refiner returned empty result for %d heuristic entries - "
                     "falling back to Scenario C. doc_id=%s",
                     len(heuristic),
                     getattr(doc, "doc_id", "unknown"),
