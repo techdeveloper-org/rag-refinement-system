@@ -39,6 +39,9 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    # >=83.0.0 remediates PYSEC-2026-3447; pinned explicitly since CI's base
+    # image ships an older setuptools that pip does not otherwise upgrade.
+    "setuptools>=83.0.0",
     "ruff>=0.4,<1.0",
     "mypy>=1.10,<2.0",
     "pytest>=9.0.3,<10.0",
@@ -50,7 +53,8 @@ dev = [
 ]
 
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+# >=83.0.0 remediates PYSEC-2026-3447.
+requires = ["setuptools>=83.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]

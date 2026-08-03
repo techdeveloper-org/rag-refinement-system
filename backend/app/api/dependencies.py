@@ -22,6 +22,7 @@ without loss of concurrency, since singletons are only built once on cold start.
 
 from __future__ import annotations
 
+import logging
 import threading
 
 from backend.app.api.interfaces import (
@@ -32,6 +33,8 @@ from backend.app.api.interfaces import (
 )
 from backend.app.errors import service_unavailable
 from backend.app.settings import get_settings
+
+logger = logging.getLogger(__name__)
 
 _singleton_lock = threading.RLock()
 """Single re-entrant process-wide lock for all singleton builders (issue #222).
@@ -146,10 +149,10 @@ def _generation_llm_singleton() -> GenerationLLM:
             from backend.app.settings import get_settings
 
             settings = get_settings()
-            _generation_llm_cache = ClaudeGenerationLLM(  # type: ignore[assignment]
+            _generation_llm_cache = ClaudeGenerationLLM(
                 thinking_budget_tokens=settings.generation_thinking_budget_tokens
             )
-    return _generation_llm_cache  # type: ignore[return-value]
+    return _generation_llm_cache
 
 
 def get_document_store() -> DocumentStore:
@@ -207,4 +210,4 @@ async def _dispose_engines() -> None:
             if engine is not None:
                 await engine.dispose()
         except Exception:
-            pass
+            logger.warning("Error disposing document store engine on shutdown", exc_info=True)

@@ -18,7 +18,7 @@ The dataclasses mirror the AGREED CONTRACT shapes:
 
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator, AsyncIterator
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
@@ -214,7 +214,8 @@ class GenerationLLM(Protocol):
         sections: list[RoutedSection],
     ) -> AsyncIterator[str]:
         """Yield answer token fragments for the routed sections."""
-        ...
+        raise NotImplementedError
+        yield  # pragma: no cover - unreachable, marks this an async generator
 
 
 class DependencyUnavailable(Exception):  # noqa: N818 - maps to SERVICE_UNAVAILABLE, not an *Error

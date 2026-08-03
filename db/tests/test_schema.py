@@ -38,7 +38,7 @@ _FORWARD_SQL_003 = _MIGRATIONS_DIR / "003_erasure_outbox_fk.sql"
 _FORWARD_SQL_004 = _MIGRATIONS_DIR / "004_fix_tenant_hash_partial_index.sql"
 _DOWN_SQL_004 = _MIGRATIONS_DIR / "004_fix_tenant_hash_partial_index.down.sql"
 
-# Ordered list of all forward migrations — used by the live integration test
+# Ordered list of all forward migrations - used by the live integration test
 # to apply them in dependency order.
 _ALL_FORWARD_MIGRATIONS: list[pathlib.Path] = [
     _FORWARD_SQL,
@@ -268,7 +268,10 @@ def test_migration_002_declares_tenant_hash_unique_index() -> None:
         r"uq_documents_tenant_hash[\s\S]*content_hash\s+IS\s+NOT\s+NULL",
         ddl,
         re.IGNORECASE,
-    ), "uq_documents_tenant_hash in migration 002 must be a partial index on content_hash IS NOT NULL"
+    ), (
+        "uq_documents_tenant_hash in migration 002 must be a partial index "
+        "on content_hash IS NOT NULL"
+    )
 
 
 def test_migration_003_declares_erasure_outbox_fk() -> None:
@@ -327,28 +330,51 @@ def test_migration_004_erasure_outbox_fk_is_cascade_in_model() -> None:
     not os.environ.get("DATABASE_URL"),
     reason="DATABASE_URL not set; live forward+rollback migration test skipped.",
 )
-def test_forward_then_rollback_restores_baseline() -> None:
+@pytest.mark.anyio
+async def test_forward_then_rollback_restores_baseline() -> None:
     """Apply all forward migrations in order, then rollback 001; expect clean state.
 
     Applies migrations 001 through 004 in dependency order against a live Postgres
     instance, then runs the 001 rollback. All migrations are tested, not just 001.
     Skipped without ``DATABASE_URL`` so the suite stays offline-green.
-    """
-    from sqlalchemy import create_engine, inspect, text
 
-    engine = create_engine(os.environ["DATABASE_URL"])
-    # Apply all migrations in order (001 → 002 → 003 → 004).
-    for migration_path in _ALL_FORWARD_MIGRATIONS:
-        migration_sql = _read(migration_path)
-        with engine.begin() as conn:
-            conn.execute(text(migration_sql))
-    inspector = inspect(engine)
-    assert inspector.has_table("documents")
-    assert inspector.has_table("sections")
-    # Roll back 001 (which cascades to drop all dependent objects).
-    down = _read(_DOWN_SQL)
-    with engine.begin() as conn:
-        conn.execute(text(down))
-    inspector = inspect(engine)
-    assert not inspector.has_table("sections")
-    assert not inspector.has_table("documents")
+    ``DATABASE_URL`` carries the ``postgresql+asyncpg://`` async DSN (per
+    ``asyncpg`` being the project's only Postgres driver dependency), so this
+    uses ``create_async_engine`` rather than the sync ``create_engine`` -
+    mixing a sync engine with an async-only driver raises
+    ``sqlalchemy.exc.MissingGreenlet``.
+    """
+    from sqlalchemy import inspect, text
+    from sqlalchemy.ext.asyncio import create_async_engine
+
+    engine = create_async_engine(os.environ["DATABASE_URL"])
+    try:
+        # Apply all migrations in order (001 -> 002 -> 003 -> 004).
+        for migration_path in _ALL_FORWARD_MIGRATIONS:
+            migration_sql = _read(migration_path)
+            async with engine.begin() as conn:
+                await conn.execute(text(migration_sql))
+        async with engine.connect() as conn:
+            has_documents = await conn.run_sync(
+                lambda sync_conn: inspect(sync_conn).has_table("documents")
+            )
+            has_sections = await conn.run_sync(
+                lambda sync_conn: inspect(sync_conn).has_table("sections")
+            )
+        assert has_documents
+        assert has_sections
+        # Roll back 001 (which cascades to drop all dependent objects).
+        down = _read(_DOWN_SQL)
+        async with engine.begin() as conn:
+            await conn.execute(text(down))
+        async with engine.connect() as conn:
+            sections_remain = await conn.run_sync(
+                lambda sync_conn: inspect(sync_conn).has_table("sections")
+            )
+            documents_remain = await conn.run_sync(
+                lambda sync_conn: inspect(sync_conn).has_table("documents")
+            )
+        assert not sections_remain
+        assert not documents_remain
+    finally:
+        await engine.dispose()

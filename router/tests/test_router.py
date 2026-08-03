@@ -339,7 +339,7 @@ async def test_llm_error_during_route_triggers_fallback(golden_toc: list[dict]) 
         "doc_abc123",
         golden_toc,
         tenant_id="tenant_test",
-        llm=error_llm,  # type: ignore[arg-type]
+        llm=error_llm,
         confidence_threshold=0.7,
         max_sections=3,
     )

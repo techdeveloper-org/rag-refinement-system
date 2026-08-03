@@ -218,7 +218,7 @@ async def answer_query(
         raise document_not_found()
 
     if document.fallback_only:
-        # TODO: product owner to confirm — Option B (whole-document RAG) may replace this
+        # TODO: product owner to confirm - Option B (whole-document RAG) may replace this
         raise validation_error(
             detail=(
                 "This document does not support section-level routing."

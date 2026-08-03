@@ -245,9 +245,6 @@ def _apply_threshold(
     high = [item for item in eligible if item.confidence >= confidence_threshold]
     if high:
         return high[:max_sections]
-    # Only fall back to mid-band for sub-HIGH_CONFIDENCE thresholds
-    if confidence_threshold >= HIGH_CONFIDENCE:
-        return []  # No section met the strict threshold -> fallback
     mid = [item for item in eligible if item.confidence < confidence_threshold]
     return mid[:max_sections]
 

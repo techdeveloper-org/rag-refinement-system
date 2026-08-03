@@ -118,14 +118,16 @@ class Document(Base):
 
     __table_args__ = (
         CheckConstraint("total_pages >= 0", name="documents_total_pages_nonneg"),
-        # Canonical DDL: migrations/002_indexes_constraints.sql (#104).
-        # Keep the partial predicate (content_hash IS NOT NULL) in sync with that migration.
+        # Canonical DDL: migrations/004_fix_tenant_hash_partial_index.sql (#206).
+        # Keep the partial predicate in sync with that migration: it excludes
+        # rows with no hash AND tombstoned rows, so a soft-deleted document no
+        # longer blocks re-upload of the same content under the same tenant.
         Index(
             "uq_documents_tenant_hash",
             "tenant_id",
             "content_hash",
             unique=True,
-            postgresql_where=content_hash.isnot(None),
+            postgresql_where=content_hash.isnot(None) & tombstoned_at.is_(None),
         ),
         Index("idx_documents_tenant_id", "tenant_id"),
         Index("idx_documents_domain", "domain"),

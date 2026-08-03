@@ -4,7 +4,7 @@ Projects the monthly LLM-spend savings a customer can expect from the
 documented token-reduction range when they place this refinement layer in
 front of their existing RAG stack. The savings band is anchored to the
 PRD-verified range of 40-70% average token reduction vs. full-document RAG
-(PRD §15.1 / §21), with a documented conservative/expected/optimistic split.
+(PRD Sec. 15.1 / Sec. 21), with a documented conservative/expected/optimistic split.
 
 This module is a pure-function GTM/sales utility. It performs no I/O, calls no
 provider, and does not touch routing, ingestion, or persistence. The dollar
@@ -124,7 +124,8 @@ def calculate_roi(
 
     Args:
         current_monthly_spend_usd: Current monthly LLM spend in USD. Must be a
-            finite, non-negative number.
+            finite, positive number; a zero or negative spend has no
+            addressable savings to project.
         context_spend_fraction: Fraction (0.0-1.0] of the spend attributable to
             retrieved context that this layer can reduce. Defaults to 0.7, a
             common context-heavy RAG profile.
@@ -134,8 +135,8 @@ def calculate_roi(
         projections plus the expected annual saving.
 
     Raises:
-        ValueError: If the spend is negative/non-finite or the context
-            fraction is outside the (0.0, 1.0] range.
+        ValueError: If the spend is not finite or not positive, or the
+            context fraction is outside the (0.0, 1.0] range.
     """
     if not math.isfinite(current_monthly_spend_usd) or current_monthly_spend_usd <= 0:
         raise ValueError(

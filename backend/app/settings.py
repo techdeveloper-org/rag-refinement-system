@@ -64,7 +64,7 @@ class Settings(BaseSettings):
         default="HS256",
         alias="JWT_ALGORITHM",
         description=(
-            "JWT signing algorithm — restricted to HMAC-SHA variants"
+            "JWT signing algorithm - restricted to HMAC-SHA variants"
             " to prevent alg:none bypass."
         ),
     )

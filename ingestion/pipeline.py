@@ -1,4 +1,4 @@
-﻿"""Ingestion pipeline orchestration (STORY-003/008/009/011).
+"""Ingestion pipeline orchestration (STORY-003/008/009/011).
 
 Implements the data-engineer-owned ``ingest_document`` entry point that backend
 calls: parse -> TOC -> section-aware chunk -> embed -> upsert, writing section
@@ -127,6 +127,7 @@ class SectionStore(Protocol):
         content_hash_value: str | None,
         ingest_status: str,
         fallback_only: bool,
+        residency_region: str = "GLOBAL",
     ) -> None:
         """Create or update the document row (tenant-scoped).
 
@@ -139,6 +140,7 @@ class SectionStore(Protocol):
             content_hash_value: Content hash (None in no-retention mode).
             ingest_status: One of ``db.models.INGEST_STATUS_VALUES``.
             fallback_only: True when no structure was detected (Scenario C).
+            residency_region: DPDP data-residency region (FR-028); defaults to GLOBAL.
         """
         ...
 
@@ -188,11 +190,12 @@ class SectionStore(Protocol):
         ...
 
     def update_residency_region(self, doc_id: str, tenant_id: str, residency_region: str) -> None:
-        """Update the residency_region for a document after ingestion (DPDP FR-028).
+        """Manually correct the residency_region for an already-ingested document (DPDP FR-028).
 
-        Called after the pipeline completes to stamp the data-residency region that
-        the synchronous pipeline cannot persist because ``IngestInput`` carries no
-        residency field.
+        ``ingest_document`` now persists ``residency_region`` on every write path via
+        ``upsert_document`` and ``upsert_document_and_replace_sections``, so this method
+        is no longer part of the ingest write path; it remains as an administrative
+        correction hook for out-of-band residency reassignment.
 
         Args:
             doc_id: Document primary key.
@@ -544,17 +547,9 @@ def ingest_document(
                 content_hash_value=hash_value,
                 ingest_status="indexed",
                 fallback_only=False,
+                residency_region=doc.residency_region,
             )
         else:
-            # Fix #180: for no_retention documents, residency_region is not passed
-            # to upsert_document because the Protocol does not carry it yet.
-            # The ingestor adapter (PipelineIngestor) calls update_residency_region
-            # after the pipeline completes to stamp the region on the document row,
-            # but only when no_retention=False (DPDP FR-028). For true no_retention
-            # documents, content is not persisted so residency enforcement is
-            # inherently limited; the TODO below tracks the gap.
-            # TODO: extend upsert_document Protocol to accept residency_region so
-            # ephemeral documents still record their intended region for audit.
             section_store.upsert_document(
                 doc_id=doc_id,
                 tenant_id=doc.tenant_id,
@@ -564,6 +559,7 @@ def ingest_document(
                 content_hash_value=None if doc.no_retention else hash_value,
                 ingest_status=ingest_status,
                 fallback_only=fallback_only_flag,
+                residency_region=doc.residency_region,
             )
 
     return IngestResult(

@@ -2,7 +2,7 @@
 
 Builds the real ASGI application: the liveness/readiness probe router
 (NFR-009, ADR-5), the /v1 routing, answer, and document/compliance routers
-(openapi.yaml), the ``/metrics`` observability surface (PRD §21), and the
+(openapi.yaml), the ``/metrics`` observability surface (PRD Sec. 21), and the
 RFC-7807 exception handlers. LangSmith tracing is configured from the
 environment at construction time. The factory is side-effect free with respect
 to external dependencies so it can be imported by the test suite and run
@@ -16,8 +16,8 @@ Notes on test isolation: ``configure_tracing()`` accepts an injectable
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -38,7 +38,7 @@ _logger = logging.getLogger(__name__)
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Manage application startup and shutdown lifecycle.
 
-    On startup no eager initialisation is performed — heavyweight singletons
+    On startup no eager initialisation is performed - heavyweight singletons
     (SQLAlchemy engine, Qdrant client, etc.) are created lazily on first
     request so the process starts quickly and without requiring credentials in
     the test environment.

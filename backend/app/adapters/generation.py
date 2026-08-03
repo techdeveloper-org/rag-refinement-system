@@ -18,11 +18,14 @@ timeouts.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 from collections.abc import AsyncIterator
 
 from backend.app.api.interfaces import DependencyUnavailable, RoutedSection
 from backend.app.settings import get_settings
+
+_logger = logging.getLogger(__name__)
 
 DEFAULT_GENERATION_MODEL = os.environ.get("GENERATION_MODEL", "claude-opus-4-8")
 """Answer-synthesis model id (overridable via the GENERATION_MODEL env var)."""
@@ -49,6 +52,10 @@ def _default_max_tokens() -> int:
     try:
         return get_settings().generation_max_tokens
     except Exception:
+        _logger.warning(
+            "Failed to read generation_max_tokens from settings; using fallback",
+            exc_info=True,
+        )
         return 16000
 
 
@@ -61,6 +68,10 @@ def _default_thinking_budget() -> int:
     try:
         return get_settings().generation_thinking_budget_tokens
     except Exception:
+        _logger.warning(
+            "Failed to read generation_thinking_budget_tokens from settings; using fallback",
+            exc_info=True,
+        )
         return 5000
 
 

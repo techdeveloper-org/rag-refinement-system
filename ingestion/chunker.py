@@ -99,7 +99,7 @@ def _section_page_text(doc: ParsedDocument, entry: TocEntry) -> list[tuple[int, 
             continue
         if not page.text.strip():
             logger.warning(
-                "Page %d in section '%s' has no extractable text (image-only?) — skipping",
+                "Page %d in section '%s' has no extractable text (image-only?) - skipping",
                 page.number,
                 getattr(entry, "title", "unknown"),
             )

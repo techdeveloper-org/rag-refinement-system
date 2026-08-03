@@ -146,7 +146,7 @@ def build_router_messages(
         A tuple ``(system_prompt, messages)`` where ``messages`` is the
         few-shot-primed user turn list for the Messages API.
     """
-    safe_query = query.replace("<<<", "< < <").replace(">>>", "> > >")
+    safe_query = query.replace("<<", "< <").replace(">>", "> >")
     allowed_repr = "[" + ", ".join(f'"{sid}"' for sid in allowed_section_ids) + "]"
     user_turn = (
         f"ALLOWED_SECTION_IDS: {allowed_repr}\n\n"

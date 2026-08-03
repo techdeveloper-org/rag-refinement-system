@@ -1,4 +1,4 @@
-"""Observability surface: the ``/metrics`` scrape endpoint (PRD §21, NFR-009).
+"""Observability surface: the ``/metrics`` scrape endpoint (PRD Sec. 21, NFR-009).
 
 Exposes the four product KPIs (token reduction %, answer accuracy, routing
 latency, fallback rate) in Prometheus text exposition format. LangSmith

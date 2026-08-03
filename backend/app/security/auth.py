@@ -23,13 +23,13 @@ import hmac
 import threading
 from dataclasses import dataclass
 
-_RATE_LIMIT_KEY_HASH_LENGTH = 16
-
 import jwt
 from fastapi import Request
 
 from backend.app.errors import unauthorized
 from backend.app.settings import Settings, get_settings
+
+_RATE_LIMIT_KEY_HASH_LENGTH = 16
 
 
 class PrincipalKind(enum.StrEnum):

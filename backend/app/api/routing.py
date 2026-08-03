@@ -87,7 +87,7 @@ async def route_query(
     """
     document_ids = list(dict.fromkeys(_target_document_ids(body)))
 
-    # Fix #262: rerank=True is not supported — reject with 422 instead of
+    # Fix #262: rerank=True is not supported - reject with 422 instead of
     # silently downgrading and returning HTTP 200.
     if body.rerank:
         raise validation_error(
