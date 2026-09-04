@@ -1,0 +1,25 @@
+{
+  "version": "1.2.0",
+  "analyzed_at": "2026-08-03T14:19:51.882200",
+  "project_dir": "C:\\Users\\techd\\Documents\\workspace-spring-tool-suite-4-4.27.0-new\\rag-refinement-system",
+  "files_analyzed": 500,
+  "graph_metrics": {
+    "total_nodes": 566,
+    "total_edges": 1904,
+    "density": 0.006,
+    "max_betweenness": 0.0,
+    "max_pagerank": 0.0914,
+    "avg_fan_out": 3.364,
+    "longest_path": 1,
+    "connected_components": 64,
+    "avg_clustering": 0.0,
+    "avg_cyclomatic": 1.86,
+    "max_cyclomatic": 20
+  },
+  "cyclomatic_metrics": {
+    "avg_cyclomatic": 1.86,
+    "max_cyclomatic": 20,
+    "total_functions": 4255
+  },
+  "graph_complexity_score": 7
+}
